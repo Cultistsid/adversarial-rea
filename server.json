@@ -50,6 +50,10 @@
       "description": "Report bounded metadata for native files and unsupported carriers"
     },
     {
+      "name": "inspect_flow_fixture",
+      "description": "Replay bounded declarative source-to-sink fixtures in memory only"
+    },
+    {
       "name": "find_gadget_candidates",
       "description": "Report byte-verified ELF64 x86_64 gadget candidates"
     }

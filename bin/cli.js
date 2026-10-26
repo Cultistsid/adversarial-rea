@@ -14,6 +14,7 @@ import { HUNTING_PATTERNS } from '../src/core/vuln-hunter.js';
 import { BinaryAnalyzer, boundedInteger } from '../src/core/binary-analyzer.js';
 import { CallSiteExtractor } from '../src/core/call-sites.js';
 import { CarrierInspector } from '../src/core/carrier-inspector.js';
+import { FlowFixtureInspector } from '../src/core/flow-fixtures.js';
 import { GadgetCandidateFinder } from '../src/core/gadget-candidates.js';
 
 const banner = `
@@ -44,13 +45,20 @@ program
   .option('-l, --limit <n>', 'Maximum directory entries or call sites', '100')
   .option('--calls', 'List observed native call sites (input flow remains unknown)')
   .option('--gadgets', 'List byte-verified ELF64 x86_64 gadget candidates')
+  .option('--flow-fixture', 'Replay a bounded declarative .flow.json fixture in memory only')
   .option('--arch <slice>', 'Mach-O architecture for calls: host, all, x86_64, arm64, arm64e', 'host')
   .action(async (target, options) => {
     try {
       const limit = boundedInteger(Number(options.limit), 100, 200);
+      if (options.flowFixture && (options.calls || options.gadgets)) {
+        throw new Error('Fixture replay cannot be combined with native call or gadget inspection');
+      }
       const analyzer = new BinaryAnalyzer();
       const carrier = await new CarrierInspector(analyzer).inspect(target, { limit });
       const result = { carrier };
+      if (options.flowFixture) {
+        result.flow_fixture = await new FlowFixtureInspector(analyzer).inspect(target);
+      }
       let analysis;
       if (options.calls) {
         if (!['elf', 'macho', 'pe'].includes(carrier.target.type)) {

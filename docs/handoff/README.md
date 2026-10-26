@@ -10,8 +10,10 @@ now emit observed direct call sites and byte-verified ELF64 x86_64 gadget
 candidates; `inspect_carrier` previews archive and package metadata only.
 The skeletons below remain **unimplemented interfaces** for general
 source-to-sink flow, relocation permissions, portable gadget decoding, and
-reproducible trigger traces. The review in [`../CODE_REVIEW.md`](../CODE_REVIEW.md)
-records the pre-fix snapshot.
+reproducible native trigger traces. `src/core/flow-fixtures.js` separately
+correlates explicit, bounded `.flow.json` steps and replays them in memory.
+Its fixture-only records cannot promote native vulnerability claims. The
+review in [`../CODE_REVIEW.md`](../CODE_REVIEW.md) records the pre-fix snapshot.
 
 ## Why the previous sketches needed correction
 
@@ -60,9 +62,11 @@ Missing data is `null` or `unknown`, never `false`.
 3. **Call-site evidence (partial).** `src/core/call-sites.js` resolves decoded
    direct calls through PLT/stubs and records unresolved indirect calls. It
    does not determine argument provenance or prove reachability.
-4. **Flow evidence.** Implement `TaintCorrelator` with def-use propagation
-   from a controlled input to the *argument* of a sink, plus conditional
-   barriers and bounded interprocedural traversal.
+4. **Native flow evidence (not implemented).** Extend the fixture-only
+   in-memory model with independently decoded def-use provenance from a
+   controlled input to the *argument* of a native sink, plus conditional
+   barriers and bounded interprocedural traversal. Fixture step declarations
+   are not proof of any native path or runtime trigger.
 5. **Optional exploitation constraints (partial).** `src/core/gadget-candidates.js`
    checks short ELF64 x86_64 sequences against executable bytes. Mach-O/PE
    gadget decoding, relocation permissions, CET/BTI/PAC landing checks, and

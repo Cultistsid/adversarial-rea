@@ -7,6 +7,7 @@
 import { BinaryAnalyzer, boundedInteger } from '../core/binary-analyzer.js';
 import { CallSiteExtractor } from '../core/call-sites.js';
 import { CarrierInspector } from '../core/carrier-inspector.js';
+import { FlowFixtureInspector } from '../core/flow-fixtures.js';
 import { GadgetCandidateFinder } from '../core/gadget-candidates.js';
 import { redactSensitive } from '../core/model-context.js';
 import { delimiter } from 'node:path';
@@ -157,6 +158,18 @@ const TOOLS = {
     }
   },
 
+  inspect_flow_fixture: {
+    name: 'inspect_flow_fixture',
+    description: 'Reproduce in-memory flow in a bounded .flow.json fixture only; not native evidence',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target_path: { type: 'string', description: 'Path to a declarative .flow.json fixture' }
+      },
+      required: ['target_path']
+    }
+  },
+
   find_gadget_candidates: {
     name: 'find_gadget_candidates',
     description: 'Byte-verified ELF64 x86_64 gadget candidates, not runtime exploit addresses',
@@ -219,6 +232,7 @@ export class AdversarialMCPServer {
     this.analyzer = new BinaryAnalyzer(allowedRoots ? { allowedRoots } : {});
     this.callSites = new CallSiteExtractor(this.analyzer);
     this.carriers = new CarrierInspector(this.analyzer);
+    this.fixtures = new FlowFixtureInspector(this.analyzer);
     this.gadgets = new GadgetCandidateFinder(this.analyzer);
   }
 
@@ -259,6 +273,8 @@ export class AdversarialMCPServer {
         result = await this.traceCalls(args); break;
       case 'inspect_carrier':
         result = await this.inspectCarrier(args); break;
+      case 'inspect_flow_fixture':
+        result = await this.inspectFlowFixture(args); break;
       case 'find_gadget_candidates':
         result = await this.findGadgetCandidates(args); break;
       default:
@@ -284,6 +300,10 @@ export class AdversarialMCPServer {
     return this.carriers.inspect(args.target_path, {
       limit: boundedInteger(args.limit, 100, 200)
     });
+  }
+
+  async inspectFlowFixture(args) {
+    return this.fixtures.inspect(args.target_path);
   }
 
   async findGadgetCandidates(args) {

@@ -32,6 +32,7 @@ const EXPECTED_TOOLS = [
   'find_dangerous_patterns',
   'trace_calls',
   'inspect_carrier',
+  'inspect_flow_fixture',
   'find_gadget_candidates',
 ];
 
@@ -152,4 +153,39 @@ test('CLI: inspect works offline without a service API key', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('stdio: fixture flow and trigger are replayed locally without upgrading native evidence', async () => {
+  const target = fileURLToPath(new URL('../fixtures/flow-direct.flow.json', import.meta.url));
+  await withClient(async client => {
+    const response = await client.callTool({
+      name: 'inspect_flow_fixture', arguments: { target_path: target }
+    });
+    assert.equal(response.isError, undefined);
+    const result = JSON.parse(response.content[0].text);
+    assert.equal(result.status, 'fixture_only');
+    assert.equal(result.flow.status, 'observed_fixture_path');
+    assert.equal(result.trigger.status, 'reproduced_fixture');
+    assert.match(result.note, /not native execution/);
+    assert.doesNotMatch(JSON.stringify(result), /review42/);
+  });
+});
+
+test('CLI: fixture replay is opt-in and remains offline', () => {
+  const target = fileURLToPath(new URL('../fixtures/flow-constant.flow.json', import.meta.url));
+  const result = spawnSync(process.execPath, [CLI, 'inspect', target, '--flow-fixture'], {
+    encoding: 'utf8', timeout: 5000, maxBuffer: 128 * 1024,
+    env: { ...process.env, ANTHROPIC_API_KEY: '' }
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.flow_fixture.flow.status, 'no_fixture_path');
+  assert.equal(parsed.flow_fixture.trigger.status, 'reproduced_fixture');
+  assert.equal(parsed.carrier.status, 'metadata_only');
+  const mixed = spawnSync(process.execPath, [CLI, 'inspect', target, '--flow-fixture', '--calls'], {
+    encoding: 'utf8', timeout: 5000, maxBuffer: 128 * 1024,
+    env: { ...process.env, ANTHROPIC_API_KEY: '' }
+  });
+  assert.equal(mixed.status, 1);
+  assert.match(mixed.stderr, /cannot be combined/);
 });

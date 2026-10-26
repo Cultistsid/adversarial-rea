@@ -7,7 +7,7 @@
 **Start with what the binary says. Mark everything else as a question.**
 
 [![npm version](https://img.shields.io/badge/version-0.1.0-cb3837?style=flat-square)](package.json)
-[![MCP tool catalog](https://img.shields.io/badge/MCP-11_local_tools-5c4ee5?style=flat-square)](#mcp-tool-catalog)
+[![MCP tool catalog](https://img.shields.io/badge/MCP-12_local_tools-5c4ee5?style=flat-square)](#mcp-tool-catalog)
 [![Node.js requirements](https://img.shields.io/badge/Node.js-%3E%3D22.0.0-339933?style=flat-square&logo=nodedotjs&logoColor=white)](#what-you-can-analyze)
 [![Swarm roles](https://img.shields.io/badge/Swarm-8_offensive_roles-ef4444?style=flat-square)](#agent-swarm-roles)
 [![CWE coverage](https://img.shields.io/badge/CWE-review_patterns-f97316?style=flat-square)](#vulnerability-patterns-cwe-coverage)
@@ -23,7 +23,7 @@
 
 > [!IMPORTANT]
 > Get **Adversarial REA** from [Cultistsid/adversarial-rea](https://github.com/Cultistsid/adversarial-rea).
-> Native telemetry extraction runs locally. Imports, strings, call sites, gadget candidates, and generated review candidates are **not verified vulnerabilities**. Call-site evidence is available, but source-to-sink flow and observed trigger evidence are not produced by this release; chains remain blocked without them.
+> Native telemetry extraction runs locally. Imports, strings, call sites, gadget candidates, and generated review candidates are **not verified vulnerabilities**. Native source-to-sink flow and observed native triggers are not produced by this release; chains remain blocked without them. Separately, synthetic `.flow.json` fixtures can be correlated and replayed entirely in memory. Fixture observations cannot validate a native binary.
 
 <div align="center">
 
@@ -69,7 +69,7 @@ Add `adversarial-rea` to your MCP client configuration (`mcp.json`):
 }
 ```
 
-Restart your MCP client after saving. All 11 inspection tools register over stdio JSON-RPC 2.0 and require **zero external API keys**.
+Restart your MCP client after saving. All 12 inspection tools register over stdio JSON-RPC 2.0 and require **zero external API keys**.
 
 ### Ask your agent
 
@@ -87,6 +87,9 @@ Run local inspection without a key; the separate candidate-triage commands use a
 ```bash
 # Offline metadata for APK/IPA/JAR/ASAR, Wasm, JS/text, PE, firmware, or .app bundles
 node bin/cli.js inspect ./package.apk --limit 50
+
+# Reproduce a declarative fixture flow in memory, not a native program
+node bin/cli.js inspect test/fixtures/flow-direct.flow.json --flow-fixture
 
 # Offline call sites on native files, or byte-verified gadget candidates on ELF64 x86_64
 node bin/cli.js inspect ./target.elf --calls --gadgets
@@ -117,7 +120,7 @@ adv-rea --help
 
 ## How Adversarial REA works
 
-The native analyzer reads a regular file (up to 64 MiB), identifies its magic bytes, and invokes local tools with argument arrays, timeouts, and output limits. The separate carrier inspector reads bounded headers and indexes without unpacking or executing content. Extraction failures remain visible; unknown mitigation status is not converted to "off." Optional reasoning only receives a bounded structural summary, never extracted secret-like string values by default.
+The native analyzer reads a regular file (up to 64 MiB), identifies its magic bytes, and invokes local tools with argument arrays, timeouts, and output limits. The separate carrier inspector reads bounded headers and indexes without unpacking or executing content. A separate fixture evaluator follows explicit single-argument steps and repeats a deterministic in-memory sink observation; it does not run binaries. Extraction failures remain visible; unknown mitigation status is not converted to "off." Optional reasoning only receives a bounded structural summary, never extracted secret-like string values by default.
 
 <div align="center">
 
@@ -128,7 +131,7 @@ The native analyzer reads a regular file (up to 64 MiB), identifies its magic by
 1. **Local telemetry (`BinaryAnalyzer`, `CarrierInspector`)** — Native metadata or metadata-only previews for other file formats; carrier previews do not imply code parsing.
 2. **Instruction evidence (`CallSiteExtractor`, `GadgetCandidateFinder`)** — Opt-in direct call instructions with target hashes and versioned evidence IDs; selected ELF64 x86_64 gadget candidates are checked against executable file bytes. Neither proves reachable input flow or exploitability.
 3. **Review hypotheses (`AttackSurfaceEnumerator`, `VulnHunter`)** — Suggests possible vectors and CWE follow-up checks. Triage scores and remote answers remain unverified.
-4. **Evidence gate (`ExploitChainBuilder`)** — Requires independently verified flow, stage references, and an observed trigger trace. Those flow/trigger producers are not implemented; ordinary analyses return no validated exploit chain.
+4. **Evidence gate (`ExploitChainBuilder`)** — Requires independently verified native flow, stage references, and an observed native trigger trace. Those native flow/trigger producers are not implemented; fixture-only records are excluded, so ordinary analyses return no validated exploit chain.
 
 ---
 
@@ -140,15 +143,16 @@ The file signature decides the native format; `--type` only asserts an expected 
 | ----- | ------ | ---------- |
 | ELF native file | Native triage where `objdump`, `nm`, and `strings` are available | Bounded metadata, disassembly, RELRO signals, opt-in call sites, and byte-verified gadget candidates **only for ELF64 x86_64** |
 | Mach-O native file | Native triage on macOS | Bounded metadata and mitigation signals; opt-in direct call sites select the host architecture by default (including `arm64e`) |
-| PE native file (including drivers) | Experimental | `inspect_carrier` reads section metadata and declared ASLR/NX/CFG flags. Native code/symbol extraction depends on host tools; IOCTL/data-flow analysis is **not** implemented |
+| PE native file (including drivers) | Experimental | `inspect_carrier` checks section raw extents and reads declared entry point, image base, certificate-table extent, and ASLR/NX/CFG flags. It does **not** verify signatures or enforcement; native code/symbol extraction depends on host tools; IOCTL/data-flow analysis is not implemented |
 | Text / JavaScript | Metadata-only | Byte and line counts; **no** AST or dependency analysis |
 | `.app` directories | Metadata-only | `Contents` entry listing without following child symlinks; no bundle code/IPC parser |
-| APK / IPA / JAR / ZIP | Metadata-only | Bounded ZIP central-directory listing and path/encryption flags; no unpacking or manifest analysis; ZIP64/multi-disk unsupported |
+| APK / IPA / JAR / ZIP | Metadata-only | Bounded ZIP central-directory listing cross-checked against local names/methods/extents, suspicious path/symlink flags and declared expansion size; no unpacking or manifest analysis; ZIP64/multi-disk unsupported |
 | ASAR archives | Metadata-only | Bounded header file index and declared file offsets; no script execution, AST, or IPC analysis |
 | WebAssembly | Metadata-only | Version 1 section offsets/sizes; no instruction decoder |
-| Raw `.bin` / `.fw` firmware | Metadata-only | ELF *magic* offset if present; no filesystem extraction or executable verification |
+| Raw `.bin` / `.fw` firmware | Metadata-only | First ELF magic offset and up to 16 structurally plausible ELF header candidates; no filesystem extraction or executable verification |
+| Declarative `.flow.json` fixture | Fixture-only | One explicit source, one sink, literal/copy/allowlist steps, and two deterministic in-memory replays; no native flow or vulnerability verdict |
 
-Large files (over 64 MiB) and non-regular files are rejected. Each native subprocess has a 15-second timeout and a 2 MiB output cap; truncated or unavailable evidence is not treated as proof of safety. For an MCP client that should see only one directory, set `ADV_REA_ALLOWED_ROOTS=/absolute/path/to/targets` in its server environment. Without it, any readable local regular file can be submitted for inspection.
+Large files (over 64 MiB) and non-regular files are rejected; flow fixtures have a separate 16 KiB / 32-step limit. Each native subprocess has a 15-second timeout and a 2 MiB output cap; truncated or unavailable evidence is not treated as proof of safety. For an MCP client that should see only one directory, set `ADV_REA_ALLOWED_ROOTS=/absolute/path/to/targets` in its server environment. Without it, any readable local regular file can be submitted for inspection.
 
 <a id="mcp-tool-catalog"></a>
 
@@ -169,6 +173,7 @@ Every tool exposed by `src/mcp/main.js` runs locally with zero network dependenc
 | `trace_calls` | Decoded direct native calls with target hash and provider version; input flow unknown | `target_path`, `sinks`, `arch`, `limit` |
 | `find_gadget_candidates` | ELF64 x86_64 gadget candidates verified against executable file bytes; runtime addresses unknown | `target_path`, `limit` |
 | `inspect_carrier` | Bounded metadata for ZIP/APK/IPA/JAR/ASAR, Wasm, JS/text, PE, firmware, and `.app` | `target_path`, `limit` |
+| `inspect_flow_fixture` | Explicit fixture dependency path and repeatable in-memory sink reachability; excluded from native evidence gate | `target_path` (`.flow.json`) |
 
 Responses are capped at 64 KiB. `get_strings` intentionally requires `reveal_sensitive: true` to show potentially sensitive string categories; handle that output locally.
 
@@ -240,15 +245,15 @@ Run `analyze_binary` and `find_dangerous_patterns` to identify `printf`/`strcpy`
 
 `inspect_carrier` lists bounded ASAR file entries. IPC brokers, renderer messages, and sandbox boundaries still require dedicated parsing and observed evidence.
 
-### Firmware inspection (planned)
+### Firmware header preview
 
-`inspect_carrier` can locate an ELF magic marker in a raw image. It does not prove an embedded executable or extract firmware; analyze independently extracted native files separately.
+`inspect_carrier` reports ELF magic markers and limited plausible header fields in a raw image. Even a plausible header does not prove an embedded executable or extract firmware; analyze independently extracted native files separately.
 
 ---
 
 ## Exploit chain templates
 
-Six chain definitions exist for future evidence-backed work. Only four have draft scaffold templates; `PRIV_ESC_WINDOWS` and `AUTH_BYPASS` are explicitly unsupported. Local call-site and constrained gadget evidence are available, but no implemented producer establishes end-to-end input flow or an observed trigger. The generator returns a blocked result when evidence or required facts are missing; it does not export a runnable exploit.
+Six chain definitions exist for future evidence-backed work. Only four have draft scaffold templates; `PRIV_ESC_WINDOWS` and `AUTH_BYPASS` are explicitly unsupported. Local call-site and constrained gadget evidence are available, but no implemented producer establishes end-to-end **native** input flow or an observed **native** trigger. Synthetic fixture replay does not satisfy that requirement. The generator returns a blocked result when evidence or required facts are missing; it does not export a runnable exploit.
 
 | Template | Stage Progression | Target Objective |
 | -------- | ----------------- | ---------------- |

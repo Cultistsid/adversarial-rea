@@ -5,14 +5,15 @@ files on the host.
 
 ## Files
 
-- `sample-macho` — a real Mach-O binary (a copy of `/bin/ls`) used by integration
-  tests to exercise `BinaryAnalyzer` against actual system tools (`nm`, `otool`,
-  `strings`, `file`). It is a known-good, non-stripped-ish system binary, which
-  gives tests predictable symbols, strings, and security metadata to assert on.
+- `sample-macho` — a real Mach-O binary (a copy of `/bin/ls`) retained as a
+  sample. Current live-binary integration tests inspect the host `/bin/ls`.
+- `flow-direct.flow.json`, `flow-constant.flow.json`, `flow-guarded.flow.json`,
+  `flow-rejected.flow.json` — bounded declarative in-memory replay cases. No
+  fixture is executed as a native program or used to verify a vulnerability.
 
 ## Notes
 
 - Unit tests should prefer the mock in `test/helpers/mock-analyzer.js` and avoid
   touching these fixtures, so they stay fast and host-independent.
-- Integration tests may skip themselves when the required system tools are not
-  present (e.g. `otool` is macOS-only).
+- Current live-binary integration tests require a macOS `/bin/ls` and the
+  relevant host inspection tools; fixture-only unit tests do not.

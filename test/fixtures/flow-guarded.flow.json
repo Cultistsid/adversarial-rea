@@ -1,0 +1,9 @@
+{
+  "schema": "adv-rea-flow-fixture-v1",
+  "sample_input": "review42",
+  "steps": [
+    { "id": "entry", "op": "source" },
+    { "id": "checked", "op": "validate", "from": "entry", "rule": "alphanumeric" },
+    { "id": "display", "op": "sink", "from": "checked" }
+  ]
+}

@@ -1,19 +1,32 @@
-# Code review: current tree and uncommitted scaffold work
+# Code review: pre-fix snapshot and current status
 
 > [!NOTE]
-> Historical review snapshot, written **before** the fixes in the current
-> worktree. The shell interpolation, import-only primitive mapping, secret
-> string prompts, broken chain integration/scoring, manifest drift, and CLI
-> option wiring described below have since been changed. The remaining
-> architectural gaps are local call-site/flow/trigger evidence producers and
-> deep parsers for unsupported formats. Re-run the tests for current status.
+> This review records an older snapshot, **before** commit `4ef498e`.
+> Historical line numbers and statements about uncommitted files refer to
+> that snapshot, not to the current tree. Do not treat the findings below as
+> presently reproducible without rechecking the relevant implementation.
 
 Scope: `src/core/`, `src/index.js`, `bin/cli.js`, MCP definitions, tests and
-public claims. The uncommitted `src/core/exploit-scaffolds.js`,
-`src/core/exploit-chain.js`, `docs/EXPLOIT_SCAFFOLDS.md` and example/report
-files were already present when this review began; they were **not changed**.
-`npm run test:all` passed 71/71 on this tree, but none of those tests exercise
-scaffold generation. `node --check` passes for both scaffold JS files.
+public claims. At review time, the scaffold and chain drafts were being
+evaluated as uncommitted work. The reviewer's historical 71/71 test result
+does **not** describe the current suite. Run `npm run test:all` instead.
+
+## Verified changes since the snapshot
+
+| Historical issue | Current behavior |
+| --- | --- |
+| Shell interpolation in native tool calls | Uses argument-array subprocesses with time/output/input bounds; regression tests cover literal shell characters. |
+| Imports converted into verified primitives | Imports remain candidate observations; ledger-gated findings require local records, and unresolved scaffold placeholders return `blocked`. |
+| Raw secret-like strings in remote prompts | Structural summaries omit raw string values by default; `get_strings` reveals sensitive categories only with an explicit local opt-in. |
+| Broken chain/CLI wiring and inflated scoring | Shared analysis snapshots, supported-template checks, stage coverage and `--no-chain` / hunt pattern flags have regression tests; model assertions are not sufficient evidence. |
+| MCP manifest drift and exaggerated format support | `server.json` matches 12 registered local tools. PE, package and firmware inspection returns bounded **metadata**, not deep code or signature analysis. |
+| No source-to-sink fixture cases | `inspect_flow_fixture` replays bounded synthetic steps only. Fixture evidence is excluded from native finding and chain gates. |
+
+Native argument def-use provenance, observed native triggers, PE IAT/IOCTL
+analysis, firmware extraction, and portable decoding remain unimplemented.
+The current tree emits native call-site observations and constrained gadget
+candidates; neither proves a vulnerability. Historical findings below remain
+as a record of why these boundaries matter.
 
 ## Findings (highest severity first)
 
@@ -138,6 +151,8 @@ capabilities separately. An inaccurate showcase undermines the central
 6. Use synthetic embedded credentials and a missing/broken analysis tool to
    verify redaction and fail-closed/incomplete-result behavior.
 
-Review-only: no production code or pre-existing uncommitted files were
-rewritten by this handoff. See [`handoff/README.md`](handoff/README.md) for
-corrected skeleton contracts and implementation order.
+The original review was review-only at the time. Subsequent work changed
+production code and test coverage; do not interpret the older "uncommitted"
+or "not changed" descriptions as claims about the present tree. See
+[`handoff/README.md`](handoff/README.md) for design-only contracts and
+[`../MCP_USAGE.md`](../MCP_USAGE.md) for the current exposed inspection tools.

@@ -14,13 +14,14 @@ const EXPECTED_TOOLS = [
   'find_dangerous_patterns',
   'trace_calls',
   'inspect_carrier',
+  'inspect_flow_fixture',
   'find_gadget_candidates'
 ];
 
 test('getToolList() returns every registered tool', () => {
   const server = new AdversarialMCPServer();
   const list = server.getToolList();
-  assert.equal(list.length, 11);
+  assert.equal(list.length, 12);
   assert.deepEqual(list.map(t => t.name).sort(), [...EXPECTED_TOOLS].sort());
 });
 
