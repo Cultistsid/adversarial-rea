@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 280" width="100%" height="100%">
+  <defs>
+    <linearGradient id="flowBg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0b0f19"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="280" rx="12" fill="url(#flowBg)" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Step 1 -->
+  <rect x="28" y="36" width="230" height="208" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/>
+  <rect x="44" y="52" width="74" height="20" rx="4" fill="#0c4a6e"/>
+  <text x="81" y="66" text-anchor="middle" fill="#7dd3fc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700">PHASE 01</text>
+  <text x="44" y="96" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700">Binary Telemetry</text>
+  <g fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
+    <text x="44" y="124">• objdump / otool headers</text>
+    <text x="44" y="146">• nm symbol tables</text>
+    <text x="44" y="168">• Classified strings</text>
+    <text x="44" y="190">• PIE / NX / Canary / RELRO</text>
+    <text x="44" y="218" fill="#38bdf8">Zero hallucinations</text>
+  </g>
+
+  <line x1="258" y1="140" x2="294" y2="140" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Step 2 -->
+  <rect x="298" y="36" width="230" height="208" rx="10" fill="#0f172a" stroke="#a855f7" stroke-width="1.5"/>
+  <rect x="314" y="52" width="74" height="20" rx="4" fill="#3b0764"/>
+  <text x="351" y="66" text-anchor="middle" fill="#d8b4fe" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700">PHASE 02</text>
+  <text x="314" y="96" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700">Attack Surface Map</text>
+  <g fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
+    <text x="314" y="124">• Network &amp; IPC vectors</text>
+    <text x="314" y="146">• File &amp; parser inputs</text>
+    <text x="314" y="168">• Trust boundary crossings</text>
+    <text x="314" y="190">• R/W &amp; leak primitives</text>
+    <text x="314" y="218" fill="#c084fc">Surface Score (0–100)</text>
+  </g>
+
+  <line x1="528" y1="140" x2="564" y2="140" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Step 3 -->
+  <rect x="568" y="36" width="230" height="208" rx="10" fill="#0f172a" stroke="#f97316" stroke-width="1.5"/>
+  <rect x="584" y="52" width="74" height="20" rx="4" fill="#431407"/>
+  <text x="621" y="66" text-anchor="middle" fill="#fdba74" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700">PHASE 03</text>
+  <text x="584" y="96" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700">8-Role Vuln Swarm</text>
+  <g fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
+    <text x="584" y="124">• 19 CWE static signatures</text>
+    <text x="584" y="146">• Parallel domain agents</text>
+    <text x="584" y="168">• Trigger &amp; sink correlation</text>
+    <text x="584" y="190">• Confidence &amp; severity rank</text>
+    <text x="584" y="218" fill="#fb923c">Deduplicated findings</text>
+  </g>
+
+  <line x1="798" y1="140" x2="834" y2="140" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Step 4 -->
+  <rect x="838" y="36" width="234" height="208" rx="10" fill="#0f172a" stroke="#10b981" stroke-width="1.5"/>
+  <rect x="854" y="52" width="74" height="20" rx="4" fill="#064e3b"/>
+  <text x="891" y="66" text-anchor="middle" fill="#6ee7b7" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700">PHASE 04</text>
+  <text x="854" y="96" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700">Exploit Chain Synthesis</text>
+  <g fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
+    <text x="854" y="124">• 6 multi-stage templates</text>
+    <text x="854" y="146">• Primitive-to-stage match</text>
+    <text x="854" y="168">• Mitigation bypass plan</text>
+    <text x="854" y="190">• Feasibility scoring</text>
+    <text x="854" y="218" fill="#34d399">PoC skeleton generation</text>
+  </g>
+</svg>

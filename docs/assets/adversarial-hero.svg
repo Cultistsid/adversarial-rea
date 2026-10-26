@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="accentRed" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="accentPurple" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <filter id="glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="520" rx="14" fill="url(#bg)" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Subtle Grid -->
+  <g stroke="#1e293b" stroke-width="1" opacity="0.45">
+    <line x1="0" y1="80" x2="1200" y2="80"/>
+    <line x1="0" y1="160" x2="1200" y2="160"/>
+    <line x1="0" y1="240" x2="1200" y2="240"/>
+    <line x1="0" y1="320" x2="1200" y2="320"/>
+    <line x1="0" y1="400" x2="1200" y2="400"/>
+    <line x1="240" y1="0" x2="240" y2="520"/>
+    <line x1="480" y1="0" x2="480" y2="520"/>
+    <line x1="720" y1="0" x2="720" y2="520"/>
+    <line x1="960" y1="0" x2="960" y2="520"/>
+  </g>
+
+  <!-- Top Window Bar -->
+  <rect x="0" y="0" width="1200" height="42" rx="14" fill="#0b1120"/>
+  <rect x="0" y="28" width="1200" height="14" fill="#0b1120"/>
+  <line x1="0" y1="42" x2="1200" y2="42" stroke="#1e293b" stroke-width="1.5"/>
+  <circle cx="24" cy="21" r="6" fill="#ef4444"/>
+  <circle cx="44" cy="21" r="6" fill="#f59e0b"/>
+  <circle cx="64" cy="21" r="6" fill="#10b981"/>
+  <text x="600" y="26" text-anchor="middle" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="13" font-weight="600">
+    adversarial-rea — MCP Bridge &amp; 8-Agent Exploitation Swarm
+  </text>
+
+  <!-- Left Panel: Terminal & Native Telemetry -->
+  <g filter="url(#glow)">
+    <rect x="28" y="64" width="545" height="428" rx="10" fill="#0b0f19" stroke="#334155" stroke-width="1.5"/>
+    <rect x="28" y="64" width="545" height="32" rx="10" fill="#161f33"/>
+    <text x="46" y="85" fill="#e2e8f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700">
+      STATIC EXTRACTION BRIDGE (objdump · nm · strings · otool)
+    </text>
+    <rect x="468" y="72" width="90" height="16" rx="4" fill="#064e3b"/>
+    <text x="513" y="84" text-anchor="middle" fill="#34d399" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700">
+      GROUND TRUTH
+    </text>
+  </g>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5">
+    <text x="48" y="122" fill="#38bdf8">$ npx adv-rea analyze ./target.elf --agents 8 --type elf</text>
+    <text x="48" y="148" fill="#94a3b8">[MCP] analyze_binary("./target.elf") → 48,392 bytes (ELF 64-bit LSB)</text>
+
+    <text x="48" y="178" fill="#f8fafc" font-weight="700">▸ SECURITY POSTURE (Score: 35 / 100)</text>
+    <text x="64" y="200" fill="#ef4444">✗ PIE: disabled (ET_EXEC @ 0x400000)</text>
+    <text x="64" y="220" fill="#ef4444">✗ Stack Canary: missing (__stack_chk_fail absent)</text>
+    <text x="64" y="240" fill="#f59e0b">! RELRO: partial (GOT writable)</text>
+    <text x="64" y="260" fill="#10b981">✓ NX: enabled (GNU_STACK RW-)</text>
+
+    <text x="48" y="292" fill="#f8fafc" font-weight="700">▸ DANGEROUS SYMBOLS &amp; CALL SITES</text>
+    <text x="64" y="314" fill="#f87171">0x00401284  callq  strcpy@plt        [CWE-120 CRITICAL]</text>
+    <text x="64" y="334" fill="#f87171">0x004013c0  callq  system@plt        [CWE-78  CRITICAL]</text>
+    <text x="64" y="354" fill="#fbbf24">0x00401510  callq  printf@plt        [CWE-134 HIGH]</text>
+    <text x="64" y="374" fill="#fbbf24">0x0040169a  callq  malloc@plt        [CWE-190 HIGH]</text>
+
+    <text x="48" y="406" fill="#f8fafc" font-weight="700">▸ CLASSIFIED STRINGS</text>
+    <text x="64" y="428" fill="#c084fc">"-----BEGIN RSA PRIVATE KEY-----"   [crypto_material]</text>
+    <text x="64" y="448" fill="#c084fc">"admin_api_secret = 9f8e2a..."      [credential_related]</text>
+    <text x="64" y="468" fill="#38bdf8">"SELECT * FROM users WHERE id=%s"   [sql]</text>
+  </g>
+
+  <!-- Right Top Panel: 8-Agent Swarm Status -->
+  <g filter="url(#glow)">
+    <rect x="598" y="64" width="574" height="226" rx="10" fill="#0b0f19" stroke="#334155" stroke-width="1.5"/>
+    <rect x="598" y="64" width="574" height="32" rx="10" fill="#161f33"/>
+    <text x="616" y="85" fill="#e2e8f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700">
+      PARALLEL AGENT SWARM (8 SPECIALIZED ROLES)
+    </text>
+    <rect x="1062" y="72" width="96" height="16" rx="4" fill="#3b0764"/>
+    <text x="1110" y="84" text-anchor="middle" fill="#c084fc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700">
+      8 / 8 ACTIVE
+    </text>
+  </g>
+
+  <!-- Swarm Role Cards -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
+    <rect x="614" y="108" width="264" height="36" rx="6" fill="#111827" stroke="#ef4444" stroke-width="1"/>
+    <text x="626" y="130" fill="#fca5a5">✓ mem-corrupt</text>
+    <text x="866" y="130" text-anchor="end" fill="#ef4444" font-weight="700">3 CRITICAL</text>
+
+    <rect x="892" y="108" width="264" height="36" rx="6" fill="#111827" stroke="#f97316" stroke-width="1"/>
+    <text x="904" y="130" fill="#fdba74">✓ mitigation-bypass</text>
+    <text x="1144" y="130" text-anchor="end" fill="#f97316" font-weight="700">ROP READY</text>
+
+    <rect x="614" y="152" width="264" height="36" rx="6" fill="#111827" stroke="#eab308" stroke-width="1"/>
+    <text x="626" y="174" fill="#fde047">✓ input-inject</text>
+    <text x="866" y="174" text-anchor="end" fill="#eab308" font-weight="700">2 HIGH</text>
+
+    <rect x="892" y="152" width="264" height="36" rx="6" fill="#111827" stroke="#a855f7" stroke-width="1"/>
+    <text x="904" y="174" fill="#d8b4fe">✓ crypto-weak</text>
+    <text x="1144" y="174" text-anchor="end" fill="#a855f7" font-weight="700">KEY LEAK</text>
+
+    <rect x="614" y="196" width="264" height="36" rx="6" fill="#111827" stroke="#38bdf8" stroke-width="1"/>
+    <text x="626" y="218" fill="#7dd3fc">✓ priv-esc</text>
+    <text x="866" y="218" text-anchor="end" fill="#38bdf8" font-weight="700">SETUID</text>
+
+    <rect x="892" y="196" width="264" height="36" rx="6" fill="#111827" stroke="#38bdf8" stroke-width="1"/>
+    <text x="904" y="218" fill="#7dd3fc">✓ logic-flaw</text>
+    <text x="1144" y="218" text-anchor="end" fill="#38bdf8" font-weight="700">AUTH BYPASS</text>
+
+    <rect x="614" y="240" width="264" height="36" rx="6" fill="#111827" stroke="#475569" stroke-width="1"/>
+    <text x="626" y="262" fill="#cbd5e1">✓ protocol-abuse</text>
+    <text x="866" y="262" text-anchor="end" fill="#94a3b8">DESYNC</text>
+
+    <rect x="892" y="240" width="264" height="36" rx="6" fill="#111827" stroke="#475569" stroke-width="1"/>
+    <text x="904" y="262" fill="#cbd5e1">✓ supply-chain</text>
+    <text x="1144" y="262" text-anchor="end" fill="#94a3b8">VERIFIED</text>
+  </g>
+
+  <!-- Right Bottom Panel: Synthesized Exploit Chain -->
+  <g filter="url(#glow)">
+    <rect x="598" y="308" width="574" height="184" rx="10" fill="#0b0f19" stroke="#334155" stroke-width="1.5"/>
+    <rect x="598" y="308" width="574" height="32" rx="10" fill="#161f33"/>
+    <text x="616" y="329" fill="#e2e8f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700">
+      SYNTHESIZED EXPLOIT CHAIN: CODE_EXEC_LINUX
+    </text>
+    <rect x="1036" y="316" width="122" height="16" rx="4" fill="#7f1d1d"/>
+    <text x="1097" y="328" text-anchor="middle" fill="#fca5a5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700">
+      FEASIBILITY: 92%
+    </text>
+  </g>
+
+  <!-- Chain Nodes -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">
+    <rect x="614" y="358" width="96" height="48" rx="6" fill="#1e1b4b" stroke="#8b5cf6" stroke-width="1.5"/>
+    <text x="662" y="379" text-anchor="middle" fill="#ddd6fe" font-weight="700">info_leak</text>
+    <text x="662" y="396" text-anchor="middle" fill="#a78bfa" font-size="9.5">CWE-134 printf</text>
+
+    <text x="720" y="386" text-anchor="middle" fill="#64748b" font-weight="700">→</text>
+
+    <rect x="730" y="358" width="96" height="48" rx="6" fill="#3b0764" stroke="#a855f7" stroke-width="1.5"/>
+    <text x="778" y="379" text-anchor="middle" fill="#f3e8ff" font-weight="700">corruption</text>
+    <text x="778" y="396" text-anchor="middle" fill="#d8b4fe" font-size="9.5">CWE-120 strcpy</text>
+
+    <text x="836" y="386" text-anchor="middle" fill="#64748b" font-weight="700">→</text>
+
+    <rect x="846" y="358" width="96" height="48" rx="6" fill="#450a0a" stroke="#ef4444" stroke-width="1.5"/>
+    <text x="894" y="379" text-anchor="middle" fill="#fecaca" font-weight="700">cf_hijack</text>
+    <text x="894" y="396" text-anchor="middle" fill="#f87171" font-size="9.5">SAVED RIP</text>
+
+    <text x="952" y="386" text-anchor="middle" fill="#64748b" font-weight="700">→</text>
+
+    <rect x="962" y="358" width="88" height="48" rx="6" fill="#431407" stroke="#f97316" stroke-width="1.5"/>
+    <text x="1006" y="379" text-anchor="middle" fill="#ffedd5" font-weight="700">rop_chain</text>
+    <text x="1006" y="396" text-anchor="middle" fill="#fb923c" font-size="9.5">No-PIE PLT</text>
+
+    <text x="1060" y="386" text-anchor="middle" fill="#64748b" font-weight="700">→</text>
+
+    <rect x="1070" y="358" width="86" height="48" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="1.5"/>
+    <text x="1113" y="379" text-anchor="middle" fill="#d1fae5" font-weight="700">shellcode</text>
+    <text x="1113" y="396" text-anchor="middle" fill="#34d399" font-size="9.5">system@plt</text>
+
+    <text x="616" y="436" fill="#94a3b8" font-size="11.5">
+      • Bypassed: NX via ret2plt (system@0x401050)   • Offset to RIP: 72 bytes   • PoC template generated
+    </text>
+    <text x="616" y="460" fill="#34d399" font-size="11.5">
+      ✓ Full JSON evidence &amp; reproduction skeleton exported to ./results.json
+    </text>
+  </g>
+</svg>

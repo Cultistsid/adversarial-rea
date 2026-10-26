@@ -1,0 +1,33 @@
+{
+  "name": "adversarial-rea",
+  "version": "0.1.0",
+  "description": "Adversarial reverse engineering harness with multi-agent exploitation workflows",
+  "command": "node",
+  "args": ["src/mcp/main.js"],
+  "env": {},
+  "capabilities": {
+    "tools": true
+  },
+  "tools": [
+    {
+      "name": "analyze_target",
+      "description": "Full adversarial analysis of a target binary/application"
+    },
+    {
+      "name": "enumerate_attack_surface",
+      "description": "Map attack vectors, trust boundaries, and exploitation primitives"
+    },
+    {
+      "name": "hunt_vulnerabilities",
+      "description": "Hunt for vulnerabilities using specialized patterns"
+    },
+    {
+      "name": "build_exploit_chain",
+      "description": "Construct exploitation chains from discovered vulnerabilities"
+    },
+    {
+      "name": "deploy_swarm",
+      "description": "Deploy agent swarm for targeted analysis"
+    }
+  ]
+}

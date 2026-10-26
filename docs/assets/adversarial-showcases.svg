@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 220" width="100%" height="100%">
+  <rect width="1100" height="220" rx="12" fill="#0b0f19" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Card 1 -->
+  <rect x="24" y="24" width="336" height="172" rx="10" fill="#111827" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="44" y="52" fill="#ef4444" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700">SHOWCASE 01 · ELF x86_64</text>
+  <text x="44" y="78" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="700">Format String Leak → ROP Chain</text>
+  <text x="44" y="106" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12.5">Correlates CWE-134 printf leak with CWE-120</text>
+  <text x="44" y="124" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12.5">stack overflow to bypass ASLR + NX and</text>
+  <text x="44" y="142" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12.5">synthesize a 5-stage CODE_EXEC_LINUX chain.</text>
+  <text x="44" y="174" fill="#fca5a5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">Feasibility: 92% · 5/5 stages matched</text>
+
+  <!-- Card 2 -->
+  <rect x="382" y="24" width="336" height="172" rx="10" fill="#111827" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="402" y="52" fill="#c084fc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700">SHOWCASE 02 · MACH-O / ELECTRON</text>
+  <text x="402" y="78" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="700">IPC Broker Sandbox Breakout</text>
+  <text x="402" y="106" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12.5">Maps renderer-to-broker trust boundaries,</text>
+  <text x="402" y="124" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12.5">flags unvalidated IPC deserialization, and</text>
+  <text x="402" y="142" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12.5">ranks SANDBOX_ESCAPE primitives.</text>
+  <text x="402" y="174" fill="#d8b4fe" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">Roles: input-inject · protocol-abuse</text>
+
+  <!-- Card 3 -->
+  <rect x="740" y="24" width="336" height="172" rx="10" fill="#111827" stroke="#10b981" stroke-width="1.5"/>
+  <text x="760" y="52" fill="#34d399" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700">SHOWCASE 03 · EMBEDDED FIRMWARE</text>
+  <text x="760" y="78" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="700">Hardcoded Key &amp; Popen Sink Triage</text>
+  <text x="760" y="106" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12.5">Extracts PEM/HMAC material via get_strings,</text>
+  <text x="760" y="124" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12.5">matches popen/system imports, and isolates</text>
+  <text x="760" y="142" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12.5">unauthenticated command injection paths.</text>
+  <text x="760" y="174" fill="#6ee7b7" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">CWE-798 + CWE-321 + CWE-78</text>
+</svg>
