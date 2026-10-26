@@ -6,16 +6,17 @@
  */
 
 export const meta = {
-  name: 'adversarial-full-analysis',
-  description: 'Full adversarial analysis with parallel agent swarms',
+  name: 'adversarial-full-analysis-concept',
+  description: 'Experimental review hypotheses; no native evidence or exploit chains',
   phases: [
     { title: 'Recon', detail: 'Attack surface enumeration' },
     { title: 'Hunt', detail: 'Vulnerability hunting swarm' },
-    { title: 'Chain', detail: 'Exploit chain construction' },
+    { title: 'Chain', detail: 'Blocked without local evidence records' },
     { title: 'Report', detail: 'Consolidate findings' }
   ]
 };
 
+export async function runFullAnalysis({ args, phase, agent, parallel }) {
 const SWARM_ROLES = [
   'mem-corrupt',
   'logic-flaw',
@@ -75,43 +76,20 @@ Return JSON with findings array. Each finding needs:
     .flatMap(r => r?.findings || [])
     .filter((f, i, arr) =>
       arr.findIndex(x => x.pattern === f.pattern && x.location === f.location) === i
-    );
+    )
+    .map(f => ({
+      ...f,
+      status: 'candidate',
+      evidence: [],
+      missing_evidence: ['local call site', 'input-to-sink flow', 'observed trigger']
+    }));
 
   return allFindings;
 });
 
-// Phase 3: Chain - Exploit Chain Construction
+// Phase 3: No chain is feasible without a local evidence ledger and a trace.
 const chains = await phase('Chain', async () => {
-  if (hunt.length === 0) {
-    return { chains: [], note: 'No vulnerabilities found for chaining' };
-  }
-
-  const vulnContext = JSON.stringify(hunt.slice(0, 15), null, 2);
-
-  const chainResults = await parallel([
-    () => agent(`Build CODE_EXEC chain from these vulnerabilities:
-${vulnContext}
-
-Chain stages: info_leak → corruption → hijack → ROP → shellcode
-Return JSON with name, feasible, feasibility_score, stages array, mitigations_bypassed.`,
-      { label: 'chain:code-exec' }),
-
-    () => agent(`Build PRIV_ESC chain from these vulnerabilities:
-${vulnContext}
-
-Chain stages: kernel_leak → exploit → cred_overwrite → root
-Return JSON with name, feasible, feasibility_score, stages array.`,
-      { label: 'chain:priv-esc' }),
-
-    () => agent(`Build AUTH_BYPASS chain from these vulnerabilities:
-${vulnContext}
-
-Chain stages: enum → bypass → session_forge → access
-Return JSON with name, feasible, feasibility_score, stages array.`,
-      { label: 'chain:auth-bypass' })
-  ]);
-
-  return chainResults.filter(c => c?.feasible);
+  return [];
 });
 
 // Phase 4: Report - Consolidate
@@ -125,12 +103,11 @@ ATTACK SURFACE:
 - Boundaries: ${recon.boundaries?.length || 0}
 - Primitives: ${recon.primitives?.length || 0}
 
-VULNERABILITIES: ${hunt.length} findings
+UNVERIFIED CANDIDATES: ${hunt.length}
 Top 5:
 ${hunt.slice(0, 5).map(v => `- ${v.pattern} at ${v.location} (${v.severity})`).join('\n')}
 
-EXPLOIT CHAINS: ${chains.length} feasible
-${chains.map(c => `- ${c.name}: ${(c.feasibility_score * 100).toFixed(0)}%`).join('\n')}
+EXPLOIT CHAINS: blocked without locally observed evidence and trigger traces
 
 Format as structured markdown report with executive summary, technical findings, and recommendations.`,
     { label: 'report' });
@@ -145,3 +122,4 @@ return {
   report,
   timestamp: new Date().toISOString()
 };
+}

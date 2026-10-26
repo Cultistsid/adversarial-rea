@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BinaryAnalyzer } from '../../src/core/binary-analyzer.js';
 import { AdversarialMCPServer } from '../../src/mcp/server.js';
 
-// BinaryAnalyzer.detectTools() runs `which <tool>` via execSync in its constructor.
+// BinaryAnalyzer.detectTools() probes for tools with argument-array subprocesses.
 // We don't mock the binary here; detectTools is expected to degrade gracefully
 // (missing tools => false) rather than throw, so a plain construction exercises it.
 function makeAnalyzer() {
@@ -190,10 +190,12 @@ test('calculateSecurityScore() scores partial RELRO lower than full', () => {
 
 test('calculateSecurityScore() sums individual mitigations', () => {
   const server = new AdversarialMCPServer();
-  assert.equal(server.calculateSecurityScore({ pie: true }), 20);
-  assert.equal(server.calculateSecurityScore({ nx: true }), 25);
-  assert.equal(server.calculateSecurityScore({ canary: true }), 25);
-  assert.equal(server.calculateSecurityScore({ fortify: true }), 15);
+  const known = { pie: false, nx: false, canary: false, fortify: false, relro: 'none' };
+  assert.equal(server.calculateSecurityScore({ ...known, pie: true }), 20);
+  assert.equal(server.calculateSecurityScore({ ...known, nx: true }), 25);
+  assert.equal(server.calculateSecurityScore({ ...known, canary: true }), 25);
+  assert.equal(server.calculateSecurityScore({ ...known, fortify: true }), 15);
+  assert.equal(server.calculateSecurityScore({ pie: true }), null, 'incomplete posture cannot be scored');
 });
 
 // --- AdversarialMCPServer.getSecurityRecommendations() ---

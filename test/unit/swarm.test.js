@@ -78,7 +78,10 @@ test('parseAgentResponse() extracts valid JSON from response text', () => {
 
   const result = swarm.parseAgentResponse(role, response);
   assert.equal(result.role, 'mem-corrupt');
-  assert.deepEqual(result.parsed, payload);
+  assert.equal(result.parsed.findings[0].id, 'f1');
+  assert.equal(result.parsed.findings[0].status, 'candidate');
+  assert.deepEqual(result.parsed.findings[0].evidence, []);
+  assert.ok(result.parsed.findings[0].missing_evidence.includes('Observed trigger'));
   assert.ok(result.raw.includes('Here are results'));
 });
 

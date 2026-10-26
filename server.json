@@ -1,7 +1,7 @@
 {
   "name": "adversarial-rea",
   "version": "0.1.0",
-  "description": "Adversarial reverse engineering harness with multi-agent exploitation workflows",
+  "description": "Evidence-first native binary triage with bounded local inspection tools",
   "command": "node",
   "args": ["src/mcp/main.js"],
   "env": {},
@@ -10,24 +10,48 @@
   },
   "tools": [
     {
-      "name": "analyze_target",
-      "description": "Full adversarial analysis of a target binary/application"
+      "name": "analyze_binary",
+      "description": "Bounded binary metadata and security posture"
     },
     {
-      "name": "enumerate_attack_surface",
-      "description": "Map attack vectors, trust boundaries, and exploitation primitives"
+      "name": "get_symbols",
+      "description": "List native symbols and imports"
     },
     {
-      "name": "hunt_vulnerabilities",
-      "description": "Hunt for vulnerabilities using specialized patterns"
+      "name": "get_strings",
+      "description": "List categorized binary strings"
     },
     {
-      "name": "build_exploit_chain",
-      "description": "Construct exploitation chains from discovered vulnerabilities"
+      "name": "check_security",
+      "description": "Inspect security mitigation signals"
     },
     {
-      "name": "deploy_swarm",
-      "description": "Deploy agent swarm for targeted analysis"
+      "name": "disassemble",
+      "description": "Read bounded native disassembly"
+    },
+    {
+      "name": "get_sections",
+      "description": "List native binary sections"
+    },
+    {
+      "name": "get_headers",
+      "description": "Read native file headers"
+    },
+    {
+      "name": "find_dangerous_patterns",
+      "description": "List unverified imports, strings, and mitigation signals"
+    },
+    {
+      "name": "trace_calls",
+      "description": "Report observed native call sites without inferring input flow"
+    },
+    {
+      "name": "inspect_carrier",
+      "description": "Report bounded metadata for native files and unsupported carriers"
+    },
+    {
+      "name": "find_gadget_candidates",
+      "description": "Report byte-verified ELF64 x86_64 gadget candidates"
     }
   ]
 }

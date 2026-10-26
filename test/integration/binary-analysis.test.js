@@ -2,7 +2,7 @@
  * Integration tests for the binary analysis pipeline.
  *
  * These run against a real binary on the host (/bin/ls on macOS) using real
- * file I/O and real execSync calls to system tools. No mocks.
+ * file I/O and real argument-array subprocess calls to system tools. No mocks.
  */
 
 import { test } from 'node:test';
@@ -76,8 +76,13 @@ test('checkSecurity on /bin/ls scores and recommends', async () => {
   const result = await server.checkSecurity({ target_path: TARGET });
 
   assert.equal(result.success, true);
-  assert.equal(typeof result.security_score, 'number');
-  assert.ok(result.security_score >= 0 && result.security_score <= 100, 'score in [0,100]');
+  if (result.security_score !== null) {
+    assert.equal(typeof result.security_score, 'number');
+    assert.ok(result.security_score >= 0 && result.security_score <= 100, 'score in [0,100]');
+  } else {
+    assert.ok(Object.values(result.mitigations).some(value => value === null || value === 'unknown'),
+      'an unknown mitigation should prevent a numeric score');
+  }
 
   assert.ok(result.mitigations && typeof result.mitigations === 'object', 'mitigations object exists');
   for (const key of ['pie', 'nx', 'canary', 'relro', 'stripped', 'fortify']) {

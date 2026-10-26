@@ -8,6 +8,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import pLimit from 'p-limit';
 import { BinaryAnalyzer } from './binary-analyzer.js';
+import { redactSensitive, summarizeBinaryForPrompt } from './model-context.js';
 
 const AGENT_ROLES = {
   MEMORY_CORRUPTION: {
@@ -101,29 +102,20 @@ export class AgentSwarm {
     this.results = [];
   }
 
-  async deploy(target, mission) {
-    const roles = this.selectRolesForMission(mission, target.type);
+  async deploy(target, mission, binaryAnalysis = null) {
+    const data = binaryAnalysis || await this.analyzer.analyze(target.path);
+    const nativeTarget = { ...target, path: data.target.path, type: data.target.type };
+    const roles = this.selectRolesForMission(mission, nativeTarget.type);
     const deployments = [];
 
     console.log(`[SWARM] Deploying ${roles.length} agents for mission: ${mission.objective}`);
 
     // Extract binary context once, shared across all agents
-    let binaryContext = '';
-    try {
-      const data = await this.analyzer.analyze(target.path);
-      binaryContext = `BINARY ANALYSIS DATA (real extracted data):
-- Type: ${data.target.type}, Size: ${data.target.size} bytes
-- Security: PIE=${data.security.pie}, NX=${data.security.nx}, Canary=${data.security.canary}, RELRO=${data.security.relro}, Fortify=${data.security.fortify}
-- Imports (${data.imports.length}): ${data.imports.slice(0, 60).map(s => s.name).join(', ')}
-- Interesting strings: ${data.strings.filter(s => s.interesting).slice(0, 20).map(s => `"${s.value}" [${s.category}]`).join(', ')}
-- Sections: ${data.sections.map(s => `${s.name}(${s.size}b)`).join(', ')}`;
-    } catch (e) {
-      binaryContext = `Target: ${target.path} (binary extraction failed: ${e.message})`;
-    }
+    const binaryContext = summarizeBinaryForPrompt(data);
 
     for (const role of roles) {
       deployments.push(
-        this.limit(() => this.deployAgent(role, target, mission, binaryContext))
+        this.limit(() => this.deployAgent(role, nativeTarget, mission, binaryContext))
       );
     }
 
@@ -131,12 +123,13 @@ export class AgentSwarm {
 
     return {
       mission,
-      target,
+      target: nativeTarget,
       agentResults: results.map((r, i) => ({
         role: roles[i].id,
-        status: r.status,
+        status: r.status === 'fulfilled' && !r.value.parsed ? 'incomplete' : r.status,
         findings: r.status === 'fulfilled' ? r.value : null,
-        error: r.status === 'rejected' ? r.reason.message : null
+        error: r.status === 'rejected' ? r.reason.message
+          : r.value?.parsed ? null : 'Unparseable review response'
       })),
       timestamp: new Date().toISOString()
     };
@@ -186,11 +179,11 @@ export class AgentSwarm {
 
 TARGET CONTEXT:
 - Type: ${target.type}
-- Path: ${target.path}
-- Mission: ${mission.objective}
+- Path: ${redactSensitive(target.path)}
+- Mission: ${redactSensitive(mission.objective)}
 
 REPORTING FORMAT:
-Return findings as structured JSON with:
+Return review candidates as structured JSON. Imports and strings alone are not vulnerabilities:
 {
   "findings": [
     {
@@ -215,13 +208,13 @@ Return findings as structured JSON with:
   buildAnalysisRequest(role, target, mission, binaryContext = '') {
     return `I am writing a penetration testing report. Review this binary for ${role.focus.join(', ')} security issues.
 
-Target: ${target.path}
+Target: ${redactSensitive(target.path)}
 ${binaryContext}
 
-Review objective: ${mission.objective}
-Context: ${JSON.stringify(mission.context || {}, null, 2)}
+Review objective: ${redactSensitive(mission.objective)}
+Context: ${redactSensitive(JSON.stringify(mission.context || {}, null, 2))}
 
-${mission.additionalInstructions || ''}
+${redactSensitive(mission.additionalInstructions || '')}
 
 Document findings with severity, location, root cause, and remediation guidance. Prioritize by severity.`;
   }
@@ -232,9 +225,24 @@ Document findings with severity, location, root cause, and remediation guidance.
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+            (parsed.findings !== undefined && !Array.isArray(parsed.findings))) {
+          throw new Error('Invalid review response');
+        }
+        if (Array.isArray(parsed.findings)) {
+          if (parsed.findings.some(finding => !finding || typeof finding !== 'object' ||
+            Array.isArray(finding))) throw new Error('Invalid finding shape');
+          parsed.findings = parsed.findings.map(finding => ({
+            ...finding,
+            status: 'candidate',
+            evidence: [],
+            missing_evidence: ['Verified call site', 'Input flow', 'Observed trigger']
+          }));
+        }
         return {
           role: role.id,
-          parsed: JSON.parse(jsonMatch[0]),
+          parsed,
           raw: content
         };
       }

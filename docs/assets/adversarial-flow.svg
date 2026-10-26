@@ -21,7 +21,7 @@
     <text x="44" y="146">• nm symbol tables</text>
     <text x="44" y="168">• Classified strings</text>
     <text x="44" y="190">• PIE / NX / Canary / RELRO</text>
-    <text x="44" y="218" fill="#38bdf8">Zero hallucinations</text>
+    <text x="44" y="218" fill="#38bdf8">Bounded local telemetry</text>
   </g>
 
   <line x1="258" y1="140" x2="294" y2="140" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
@@ -30,13 +30,13 @@
   <rect x="298" y="36" width="230" height="208" rx="10" fill="#0f172a" stroke="#a855f7" stroke-width="1.5"/>
   <rect x="314" y="52" width="74" height="20" rx="4" fill="#3b0764"/>
   <text x="351" y="66" text-anchor="middle" fill="#d8b4fe" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700">PHASE 02</text>
-  <text x="314" y="96" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700">Attack Surface Map</text>
+  <text x="314" y="96" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700">Review Hypotheses</text>
   <g fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
-    <text x="314" y="124">• Network &amp; IPC vectors</text>
-    <text x="314" y="146">• File &amp; parser inputs</text>
-    <text x="314" y="168">• Trust boundary crossings</text>
-    <text x="314" y="190">• R/W &amp; leak primitives</text>
-    <text x="314" y="218" fill="#c084fc">Surface Score (0–100)</text>
+    <text x="314" y="124">• Possible entry points</text>
+    <text x="314" y="146">• Potential input handlers</text>
+    <text x="314" y="168">• Boundary hypotheses</text>
+    <text x="314" y="190">• No proven primitives</text>
+    <text x="314" y="218" fill="#c084fc">Candidate triage score</text>
   </g>
 
   <line x1="528" y1="140" x2="564" y2="140" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
@@ -45,13 +45,13 @@
   <rect x="568" y="36" width="230" height="208" rx="10" fill="#0f172a" stroke="#f97316" stroke-width="1.5"/>
   <rect x="584" y="52" width="74" height="20" rx="4" fill="#431407"/>
   <text x="621" y="66" text-anchor="middle" fill="#fdba74" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700">PHASE 03</text>
-  <text x="584" y="96" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700">8-Role Vuln Swarm</text>
+  <text x="584" y="96" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700">CWE Review Candidates</text>
   <g fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
-    <text x="584" y="124">• 19 CWE static signatures</text>
-    <text x="584" y="146">• Parallel domain agents</text>
-    <text x="584" y="168">• Trigger &amp; sink correlation</text>
-    <text x="584" y="190">• Confidence &amp; severity rank</text>
-    <text x="584" y="218" fill="#fb923c">Deduplicated findings</text>
+    <text x="584" y="124">• 16 triage patterns</text>
+    <text x="584" y="146">• Optional parallel roles</text>
+    <text x="584" y="168">• No proven input-to-sink flow</text>
+    <text x="584" y="190">• Severity is unverified</text>
+    <text x="584" y="218" fill="#fb923c">Candidate status retained</text>
   </g>
 
   <line x1="798" y1="140" x2="834" y2="140" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
@@ -60,12 +60,12 @@
   <rect x="838" y="36" width="234" height="208" rx="10" fill="#0f172a" stroke="#10b981" stroke-width="1.5"/>
   <rect x="854" y="52" width="74" height="20" rx="4" fill="#064e3b"/>
   <text x="891" y="66" text-anchor="middle" fill="#6ee7b7" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700">PHASE 04</text>
-  <text x="854" y="96" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700">Exploit Chain Synthesis</text>
+  <text x="854" y="96" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700">Evidence Gate</text>
   <g fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
-    <text x="854" y="124">• 6 multi-stage templates</text>
-    <text x="854" y="146">• Primitive-to-stage match</text>
-    <text x="854" y="168">• Mitigation bypass plan</text>
-    <text x="854" y="190">• Feasibility scoring</text>
-    <text x="854" y="218" fill="#34d399">PoC skeleton generation</text>
+    <text x="854" y="124">• Local call-site IDs needed</text>
+    <text x="854" y="146">• Input flow unimplemented</text>
+    <text x="854" y="168">• Trigger trace required</text>
+    <text x="854" y="190">• Unknown stays unknown</text>
+    <text x="854" y="218" fill="#34d399">Scaffolds blocked by default</text>
   </g>
 </svg>

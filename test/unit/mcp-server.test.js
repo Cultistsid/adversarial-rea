@@ -11,13 +11,16 @@ const EXPECTED_TOOLS = [
   'disassemble',
   'get_sections',
   'get_headers',
-  'find_dangerous_patterns'
+  'find_dangerous_patterns',
+  'trace_calls',
+  'inspect_carrier',
+  'find_gadget_candidates'
 ];
 
-test('getToolList() returns all 8 tools', () => {
+test('getToolList() returns every registered tool', () => {
   const server = new AdversarialMCPServer();
   const list = server.getToolList();
-  assert.equal(list.length, 8);
+  assert.equal(list.length, 11);
   assert.deepEqual(list.map(t => t.name).sort(), [...EXPECTED_TOOLS].sort());
 });
 

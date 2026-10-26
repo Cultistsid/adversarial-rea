@@ -3,24 +3,29 @@
 /**
  * Adversarial REA CLI
  *
- * Command-line interface for offensive reverse engineering operations.
+ * Command-line interface for native binary triage and review hypotheses.
  */
 
 import { program } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { AdversarialREA } from '../src/index.js';
+import { HUNTING_PATTERNS } from '../src/core/vuln-hunter.js';
+import { BinaryAnalyzer, boundedInteger } from '../src/core/binary-analyzer.js';
+import { CallSiteExtractor } from '../src/core/call-sites.js';
+import { CarrierInspector } from '../src/core/carrier-inspector.js';
+import { GadgetCandidateFinder } from '../src/core/gadget-candidates.js';
 
 const banner = `
 ${chalk.red('╔═══════════════════════════════════════════════════════════╗')}
 ${chalk.red('║')}  ${chalk.bold.white('ADVERSARIAL REA')} ${chalk.gray('- Red Team RE Harness')}                   ${chalk.red('║')}
-${chalk.red('║')}  ${chalk.yellow('Multi-agent exploitation framework')}                        ${chalk.red('║')}
+${chalk.red('║')}  ${chalk.yellow('Evidence-first native binary triage')}                     ${chalk.red('║')}
 ${chalk.red('╚═══════════════════════════════════════════════════════════╝')}
 `;
 
 program
   .name('adv-rea')
-  .description('Adversarial reverse engineering harness with multi-agent swarms')
+  .description('Native binary triage with optional parallel review agents')
   .version('0.1.0');
 
 function requireApiKey() {
@@ -34,13 +39,54 @@ function requireApiKey() {
 }
 
 program
+  .command('inspect <target>')
+  .description('Local, bounded metadata triage without a remote service')
+  .option('-l, --limit <n>', 'Maximum directory entries or call sites', '100')
+  .option('--calls', 'List observed native call sites (input flow remains unknown)')
+  .option('--gadgets', 'List byte-verified ELF64 x86_64 gadget candidates')
+  .option('--arch <slice>', 'Mach-O architecture for calls: host, all, x86_64, arm64, arm64e', 'host')
+  .action(async (target, options) => {
+    try {
+      const limit = boundedInteger(Number(options.limit), 100, 200);
+      const analyzer = new BinaryAnalyzer();
+      const carrier = await new CarrierInspector(analyzer).inspect(target, { limit });
+      const result = { carrier };
+      let analysis;
+      if (options.calls) {
+        if (!['elf', 'macho', 'pe'].includes(carrier.target.type)) {
+          throw new Error('Call-site extraction requires a native file');
+        }
+        analysis = await analyzer.analyze(target);
+        result.call_sites = await new CallSiteExtractor(analyzer).trace(analysis, {
+          limit, arch: options.arch
+        });
+      }
+      if (options.gadgets) {
+        if (!['elf', 'macho', 'pe'].includes(carrier.target.type)) {
+          throw new Error('Gadget inspection requires a native file');
+        }
+        analysis ||= await analyzer.analyze(target);
+        result.gadgets = await new GadgetCandidateFinder(analyzer).find(analysis, {
+          limit: Math.min(limit, 100)
+        });
+      }
+      console.log(JSON.stringify(result, null, 2));
+    } catch (error) {
+      console.error('Inspection failed:', error.message);
+      process.exitCode = 1;
+    }
+  });
+
+program
   .command('analyze <target>')
   .description('Full adversarial analysis of a target')
-  .option('-t, --type <type>', 'Target type (pe, elf, android, etc.)')
+  .option('-t, --type <type>', 'Assert native format (elf, macho, pe)')
   .option('-a, --agents <n>', 'Max parallel agents', '8')
   .option('-o, --output <file>', 'Output file for results')
   .option('--no-aggressive', 'Disable aggressive mode (on by default)')
   .option('--no-chain', 'Skip exploit chain building')
+  .option('--trace-calls', 'Add observed native call instructions (not vulnerability claims)')
+  .option('--find-gadgets', 'Add ELF64 x86_64 byte-verified gadget candidates')
   .action(async (target, options) => {
     requireApiKey();
     console.log(banner);
@@ -48,25 +94,36 @@ program
 
     try {
       const rea = new AdversarialREA({
-        maxAgents: parseInt(options.agents, 10),
+        maxAgents: boundedInteger(Number(options.agents), 8, 16),
         aggressiveMode: options.aggressive
       });
 
       spinner.text = 'Running full analysis pipeline...';
       const results = await rea.analyzeTarget(target, {
         type: options.type,
+        traceCalls: options.traceCalls,
+        findGadgets: options.findGadgets,
         buildChains: options.chain !== false
       });
 
       spinner.succeed('Analysis complete');
 
       console.log('\n' + chalk.bold.cyan('═══ RESULTS ═══'));
-      console.log(chalk.yellow('\nAttack Surface Score:'), results.attackSurface?.score || 0);
-      console.log(chalk.yellow('Vulnerabilities Found:'), results.vulnerabilities?.length || 0);
-      console.log(chalk.yellow('Exploit Chains:'), results.exploitChains?.length || 0);
+      console.log(chalk.yellow('\nCandidate triage score:'), results.attackSurface?.candidate_score ?? 'unknown');
+      console.log(chalk.yellow('Unverified candidates:'), results.candidates?.length || 0);
+      console.log(chalk.yellow('Evidence-backed vulnerabilities:'), results.vulnerabilities?.length || 0);
+      console.log(chalk.yellow('Evidence-complete chain reviews:'), results.exploitChains?.length || 0);
+      if (results.callSites) {
+        console.log(chalk.yellow('Observed call instructions:'), results.callSites.calls.length);
+        console.log(chalk.gray('Call-site extraction status:'), results.callSites.status);
+      }
+      if (results.gadgets) {
+        console.log(chalk.yellow('Byte-verified gadget candidates:'), results.gadgets.candidates.length);
+        console.log(chalk.gray('Gadget extraction status:'), results.gadgets.status);
+      }
 
       if (results.vulnerabilities?.length > 0) {
-        console.log('\n' + chalk.bold.red('TOP VULNERABILITIES:'));
+        console.log('\n' + chalk.bold.red('EVIDENCE-BACKED FINDINGS:'));
         for (const vuln of results.vulnerabilities.slice(0, 5)) {
           console.log(chalk.red('  •'), vuln.pattern, '-', vuln.location);
           console.log(chalk.gray('    Severity:'), vuln.impact?.severity || 'unknown');
@@ -77,7 +134,7 @@ program
         console.log('\n' + chalk.bold.magenta('EXPLOIT CHAINS:'));
         for (const chain of results.exploitChains.slice(0, 3)) {
           console.log(chalk.magenta('  •'), chain.name);
-          console.log(chalk.gray('    Feasibility:'), (chain.feasibility_score * 100).toFixed(0) + '%');
+          console.log(chalk.gray('    Evidence coverage:'), (chain.evidence_coverage * 100).toFixed(0) + '%');
         }
       }
 
@@ -106,15 +163,18 @@ program
     const spinner = ora('Deploying agent swarm...').start();
 
     try {
-      const rea = new AdversarialREA({ maxAgents: parseInt(options.agents) });
+      const rea = new AdversarialREA({ maxAgents: boundedInteger(Number(options.agents), 8, 16) });
 
       const mission = {
         objective: options.mission || 'Full vulnerability assessment',
         roles: options.roles?.split(',').map(r => r.trim())
       };
+      const binary = await rea.binaryAnalyzer.analyze(target);
 
-      spinner.text = `Swarm active: ${options.agents} agents hunting...`;
-      const results = await rea.deploySwarm({ path: target }, mission);
+      spinner.text = `Running ${options.agents} review agents...`;
+      const results = await rea.deploySwarm(
+        { path: binary.target.path, type: binary.target.type }, mission, binary
+      );
 
       spinner.succeed('Swarm complete');
 
@@ -122,10 +182,11 @@ program
       for (const agent of results.agentResults) {
         const status = agent.status === 'fulfilled' ? chalk.green('✓') : chalk.red('✗');
         console.log(status, chalk.bold(agent.role));
+        if (agent.error) console.log(chalk.gray('  └─'), agent.error);
 
         if (agent.findings?.parsed?.findings) {
           for (const f of agent.findings.parsed.findings.slice(0, 3)) {
-            console.log(chalk.gray('  └─'), f.class, '-', f.severity);
+            console.log(chalk.gray('  └─ Candidate:'), f.class, '-', f.severity, '(unverified)');
           }
         }
       }
@@ -139,7 +200,7 @@ program
 
 program
   .command('hunt <target>')
-  .description('Vulnerability hunting with specific patterns')
+  .description('Unverified vulnerability triage with specific patterns')
   .option('-p, --patterns <patterns>', 'Comma-separated vulnerability patterns')
   .option('--critical-only', 'Hunt only critical severity patterns')
   .action(async (target, options) => {
@@ -149,16 +210,24 @@ program
 
     try {
       const rea = new AdversarialREA();
+      const binary = await rea.binaryAnalyzer.analyze(target);
+      const targetInfo = { path: binary.target.path, type: binary.target.type };
+      const patterns = options.patterns?.split(',').map(p => p.trim().toUpperCase());
+      if (patterns?.some(p => !HUNTING_PATTERNS[p])) {
+        throw new Error(`Unknown pattern; choose from ${Object.keys(HUNTING_PATTERNS).join(', ')}`);
+      }
 
       spinner.text = 'Enumerating attack surface...';
-      const surface = await rea.attackSurface.enumerate({ path: target, type: 'unknown' });
+      const surface = await rea.attackSurface.enumerate(targetInfo, binary);
 
       spinner.text = 'Hunting vulnerabilities...';
-      const vulns = await rea.vulnHunter.hunt({ path: target }, surface);
+      const vulns = await rea.vulnHunter.hunt(targetInfo, surface, {
+        binaryAnalysis: binary, patterns, criticalOnly: options.criticalOnly
+      });
 
-      spinner.succeed(`Hunt complete: ${vulns.length} findings`);
+      spinner.succeed(`Hunt complete: ${vulns.length} unverified candidates`);
 
-      console.log('\n' + chalk.bold.red('═══ VULNERABILITIES ═══'));
+      console.log('\n' + chalk.bold.red('═══ REVIEW CANDIDATES (NOT VERIFIED) ═══'));
       for (const vuln of vulns) {
         const severity = {
           critical: chalk.bgRed.white,
@@ -170,7 +239,7 @@ program
         console.log(severity(` ${vuln.impact?.severity?.toUpperCase() || 'UNKNOWN'} `), vuln.pattern);
         console.log(chalk.gray('  Location:'), vuln.location);
         console.log(chalk.gray('  CWE:'), vuln.cwe);
-        console.log(chalk.gray('  Confidence:'), (vuln.confidence * 100).toFixed(0) + '%');
+        console.log(chalk.gray('  Evidence:'), vuln.missing_evidence.join(', '));
         console.log();
       }
 
@@ -184,7 +253,7 @@ program
 program
   .command('surface <target>')
   .description('Attack surface enumeration only')
-  .option('-t, --type <type>', 'Target type')
+  .option('-t, --type <type>', 'Assert native format (elf, macho, pe)')
   .action(async (target, options) => {
     requireApiKey();
     console.log(banner);
@@ -192,15 +261,19 @@ program
 
     try {
       const rea = new AdversarialREA();
+      const binary = await rea.binaryAnalyzer.analyze(target);
+      if (options.type && options.type !== binary.target.type) {
+        throw new Error(`Target type mismatch: detected ${binary.target.type}, requested ${options.type}`);
+      }
       const surface = await rea.attackSurface.enumerate({
-        path: target,
-        type: options.type || 'unknown'
-      });
+        path: binary.target.path,
+        type: binary.target.type
+      }, binary);
 
       spinner.succeed('Enumeration complete');
 
       console.log('\n' + chalk.bold.cyan('═══ ATTACK SURFACE ═══'));
-      console.log(chalk.yellow('Score:'), surface.score);
+      console.log(chalk.yellow('Candidate triage score (not exploitability):'), surface.candidate_score);
 
       console.log('\n' + chalk.bold('Attack Vectors:'), surface.vectors?.length || 0);
       for (const v of (surface.vectors || []).slice(0, 5)) {
@@ -212,7 +285,7 @@ program
         console.log(chalk.yellow('  •'), b.boundary_type, ':', b.from_context, '→', b.to_context);
       }
 
-      console.log('\n' + chalk.bold('Exploitation Primitives:'), surface.primitives?.length || 0);
+      console.log('\n' + chalk.bold('Unverified primitive hypotheses:'), surface.primitives?.length || 0);
       for (const p of (surface.primitives || []).slice(0, 5)) {
         console.log(chalk.magenta('  •'), p.primitive_type, '-', p.location);
       }

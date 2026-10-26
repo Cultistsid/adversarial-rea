@@ -1,13 +1,14 @@
 /**
  * Vulnerability Hunter
  *
- * Aggressive vulnerability discovery using specialized hunting patterns.
- * Combines static analysis insights with exploitation knowledge.
+ * CWE-oriented review candidate generation from native binary structure.
+ * A remote answer is never treated as a verified vulnerability.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import { AGENT_ROLES } from './swarm.js';
 import { BinaryAnalyzer } from './binary-analyzer.js';
+import { summarizeBinaryForPrompt, redactSensitive } from './model-context.js';
 
 const HUNTING_PATTERNS = {
   // Memory corruption patterns
@@ -122,18 +123,12 @@ export class VulnHunter {
     this.analyzer = new BinaryAnalyzer();
   }
 
-  async hunt(target, attackSurface) {
+  async hunt(target, attackSurface, options = {}) {
     const vulnerabilities = [];
-
-    // Extract real binary data once, reuse across all pattern hunts
-    let binaryData = null;
-    try {
-      binaryData = await this.analyzer.analyze(target.path);
-    } catch (e) {
-      // Fall through — patterns will still run without binary data
-    }
-
-    const patterns = this.selectPatterns(target, attackSurface, binaryData);
+    const binaryData = options.binaryAnalysis || await this.analyzer.analyze(target.path);
+    const patterns = this.selectPatterns(target, attackSurface, binaryData)
+      .filter(pattern => !options.patterns || options.patterns.includes(pattern.key))
+      .filter(pattern => !options.criticalOnly || pattern.severity === 'critical');
 
     // Hunt using each pattern in parallel
     const huntPromises = patterns.map(pattern =>
@@ -141,10 +136,20 @@ export class VulnHunter {
     );
 
     const results = await Promise.allSettled(huntPromises);
+    const failed = results.filter(result => result.status === 'rejected');
+    if (failed.length) {
+      throw new AggregateError(failed.map(result => result.reason),
+        `Review incomplete: ${failed.length} pattern requests failed`);
+    }
 
     for (const result of results) {
-      if (result.status === 'fulfilled' && result.value) {
-        vulnerabilities.push(...result.value);
+      if (Array.isArray(result.value)) {
+        vulnerabilities.push(...result.value.map(f => ({
+          ...f,
+          status: 'candidate',
+          missing_evidence: ['Verified call site', 'Input-to-sink flow', 'Reproducible trigger'],
+          evidence: []
+        })));
       }
     }
 
@@ -160,7 +165,7 @@ export class VulnHunter {
     const binaryCorpus = binaryData
       ? [
           ...binaryData.imports.map(s => s.name || ''),
-          ...binaryData.strings.map(s => s.value || '')
+          ...binaryData.strings.map(s => s.category || '')
         ].join(' ').toLowerCase()
       : '';
 
@@ -196,19 +201,13 @@ export class VulnHunter {
   }
 
   async huntPattern(target, attackSurface, pattern, binaryData = null) {
-    const binaryContext = binaryData ? `
-BINARY ANALYSIS DATA (real extracted data):
-- Type: ${binaryData.target.type}, Size: ${binaryData.target.size} bytes
-- Security: PIE=${binaryData.security.pie}, NX=${binaryData.security.nx}, Canary=${binaryData.security.canary}, RELRO=${binaryData.security.relro}
-- Matching imports: ${binaryData.imports.filter(s => pattern.indicators.some(ind => (s.name || '').toLowerCase().includes(ind.toLowerCase()))).map(s => s.name).join(', ') || 'none'}
-- Relevant strings: ${binaryData.strings.filter(s => s.interesting && pattern.indicators.some(ind => (s.value || '').toLowerCase().includes(ind.toLowerCase()))).slice(0, 10).map(s => `"${s.value}"`).join(', ') || 'none'}
-- All imports: ${binaryData.imports.slice(0, 60).map(s => s.name).join(', ')}` : '';
+    const binaryContext = binaryData ? summarizeBinaryForPrompt(binaryData) : '';
 
     const prompt = `I am writing a penetration testing report. Review this ${target.type} binary for ${pattern.name} issues (${pattern.cwe}).
 ${binaryContext}
 
 Entry points from security review:
-${JSON.stringify(attackSurface.vectors?.slice(0, 5), null, 2)}
+${redactSensitive(JSON.stringify(attackSurface.vectors?.slice(0, 5), null, 2))}
 
 Security pattern to check:
 - Issue type: ${pattern.name}
@@ -216,13 +215,13 @@ Security pattern to check:
 - Severity classification: ${pattern.severity}
 - CWE reference: ${pattern.cwe}
 
-Code review steps:
-1. Identify code locations using the listed functions/indicators
-2. Trace data flow to and from these locations
-3. Assess whether unsafe conditions exist
-4. Document impact and exploitability
+Review steps:
+1. Suggest code locations for follow-up without inventing addresses
+2. State which call-site, input-flow, and trigger evidence is still missing
+3. Treat import names and string categories as hypotheses, not findings
+4. Do not claim impact or exploitability without observed evidence
 
-Return findings as JSON array:
+Return review candidates as JSON array:
 [{
   "pattern": "${pattern.key}",
   "cwe": "${pattern.cwe}",
@@ -260,12 +259,16 @@ Return findings as JSON array:
 
   parseFindings(response) {
     try {
-      const content = response.content.find(b => b.type === 'text')?.text || '[]';
+      const content = response?.content?.find(b => b.type === 'text')?.text || '';
       const match = content.match(/\[[\s\S]*\]/);
-      return match ? JSON.parse(match[0]) : [];
+      const parsed = match ? JSON.parse(match[0]) : null;
+      if (Array.isArray(parsed) && parsed.every(item =>
+        item && typeof item === 'object' && !Array.isArray(item) &&
+        typeof item.pattern === 'string')) return parsed;
     } catch {
-      return [];
+      // A failed response must not masquerade as a clean binary.
     }
+    throw new Error('Review response could not be parsed as a finding array');
   }
 
   deduplicateFindings(findings) {

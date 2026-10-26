@@ -1,14 +1,14 @@
 {
   "name": "adversarial-rea",
   "version": "0.1.0",
-  "description": "Adversarial reverse engineering harness - red team fork of REA with multi-agent exploitation workflows",
+  "description": "Evidence-first native binary triage with bounded MCP inspection and optional review agents",
   "type": "module",
   "main": "src/index.js",
   "bin": {
     "adv-rea": "./bin/cli.js"
   },
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node src/mcp/main.js",
     "analyze": "node bin/cli.js analyze",
     "swarm": "node bin/cli.js swarm",
     "hunt": "node bin/cli.js hunt",

@@ -4,7 +4,22 @@
  * Provides local binary analysis tools via MCP.
  */
 
-import { BinaryAnalyzer } from '../core/binary-analyzer.js';
+import { BinaryAnalyzer, boundedInteger } from '../core/binary-analyzer.js';
+import { CallSiteExtractor } from '../core/call-sites.js';
+import { CarrierInspector } from '../core/carrier-inspector.js';
+import { GadgetCandidateFinder } from '../core/gadget-candidates.js';
+import { redactSensitive } from '../core/model-context.js';
+import { delimiter } from 'node:path';
+
+function safeString(entry, revealSensitive = false) {
+  const sensitive = ['credential_related', 'crypto_material'].includes(entry.category);
+  return {
+    ...entry,
+    value: sensitive && !revealSensitive
+      ? '[REDACTED]'
+      : (revealSensitive ? String(entry.value) : redactSensitive(entry.value)).slice(0, 160)
+  };
+}
 
 const TOOLS = {
   analyze_binary: {
@@ -14,7 +29,7 @@ const TOOLS = {
       type: 'object',
       properties: {
         target_path: { type: 'string', description: 'Path to target binary' },
-        strings_min_len: { type: 'number', description: 'Minimum string length', default: 6 }
+        strings_min_len: { type: 'integer', minimum: 1, maximum: 64, description: 'Minimum string length', default: 6 }
       },
       required: ['target_path']
     }
@@ -27,7 +42,7 @@ const TOOLS = {
       type: 'object',
       properties: {
         target_path: { type: 'string', description: 'Path to target binary' },
-        filter: { type: 'string', description: 'Filter symbols by pattern' },
+        filter: { type: 'string', description: 'Literal substring to filter symbol names' },
         type: { type: 'string', enum: ['all', 'imports', 'exports', 'functions'], default: 'all' }
       },
       required: ['target_path']
@@ -41,8 +56,9 @@ const TOOLS = {
       type: 'object',
       properties: {
         target_path: { type: 'string', description: 'Path to target binary' },
-        min_length: { type: 'number', description: 'Minimum string length', default: 6 },
+        min_length: { type: 'integer', minimum: 1, maximum: 64, description: 'Minimum string length', default: 6 },
         interesting_only: { type: 'boolean', description: 'Only return security-relevant strings', default: false },
+        reveal_sensitive: { type: 'boolean', description: 'Explicitly reveal sensitive string categories (local use only)', default: false },
         category: { type: 'string', description: 'Filter by category (credential_related, url, path, dangerous_function, etc.)' }
       },
       required: ['target_path']
@@ -69,7 +85,7 @@ const TOOLS = {
       properties: {
         target_path: { type: 'string', description: 'Path to target binary' },
         function: { type: 'string', description: 'Specific function to disassemble' },
-        limit: { type: 'number', description: 'Max lines of output', default: 500 }
+        limit: { type: 'integer', minimum: 1, maximum: 500, description: 'Max lines of output', default: 500 }
       },
       required: ['target_path']
     }
@@ -101,11 +117,54 @@ const TOOLS = {
 
   find_dangerous_patterns: {
     name: 'find_dangerous_patterns',
-    description: 'Scan for dangerous function calls and vulnerability patterns',
+    description: 'List unverified imports, strings, and mitigation signals for manual review',
     inputSchema: {
       type: 'object',
       properties: {
         target_path: { type: 'string', description: 'Path to target binary' }
+      },
+      required: ['target_path']
+    }
+  },
+
+  trace_calls: {
+    name: 'trace_calls',
+    description: 'Observed direct native call instructions; flow and exploitability remain unknown',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target_path: { type: 'string', description: 'Path to native binary' },
+        sinks: { type: 'array', maxItems: 32, items: { type: 'string', maxLength: 128 },
+          description: 'Exact normalized sink names; empty array lists all bounded call sites' },
+        arch: { type: 'string', enum: ['host', 'all', 'x86_64', 'arm64', 'arm64e'], default: 'host',
+          description: 'Select a Mach-O slice; host selects the current architecture' },
+        limit: { type: 'integer', minimum: 1, maximum: 100, default: 100 }
+      },
+      required: ['target_path']
+    }
+  },
+
+  inspect_carrier: {
+    name: 'inspect_carrier',
+    description: 'Bounded file/container metadata only; does not claim vulnerability analysis',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target_path: { type: 'string', description: 'Path to file or .app bundle directory' },
+        limit: { type: 'integer', minimum: 1, maximum: 200, default: 100 }
+      },
+      required: ['target_path']
+    }
+  },
+
+  find_gadget_candidates: {
+    name: 'find_gadget_candidates',
+    description: 'Byte-verified ELF64 x86_64 gadget candidates, not runtime exploit addresses',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target_path: { type: 'string', description: 'Path to ELF64 x86_64 target' },
+        limit: { type: 'integer', minimum: 1, maximum: 100, default: 50 }
       },
       required: ['target_path']
     }
@@ -156,45 +215,94 @@ const DANGEROUS_FUNCTIONS = [
 
 export class AdversarialMCPServer {
   constructor() {
-    this.analyzer = new BinaryAnalyzer();
+    const allowedRoots = process.env.ADV_REA_ALLOWED_ROOTS?.split(delimiter).filter(Boolean);
+    this.analyzer = new BinaryAnalyzer(allowedRoots ? { allowedRoots } : {});
+    this.callSites = new CallSiteExtractor(this.analyzer);
+    this.carriers = new CarrierInspector(this.analyzer);
+    this.gadgets = new GadgetCandidateFinder(this.analyzer);
   }
 
   getToolList() {
     return Object.values(TOOLS);
   }
 
-  async handleToolCall(name, args) {
+  analysisState(analysis) {
+    const warnings = analysis.warnings || [];
+    const truncated = analysis.truncated || {};
+    return {
+      warnings,
+      extraction_truncated: truncated,
+      incomplete: warnings.length > 0 || Object.values(truncated).some(Boolean)
+    };
+  }
+
+  async handleToolCall(name, args = {}) {
+    let result;
     switch (name) {
       case 'analyze_binary':
-        return this.analyzeBinary(args);
+        result = await this.analyzeBinary(args); break;
       case 'get_symbols':
-        return this.getSymbols(args);
+        result = await this.getSymbols(args); break;
       case 'get_strings':
-        return this.getStrings(args);
+        result = await this.getStrings(args); break;
       case 'check_security':
-        return this.checkSecurity(args);
+        result = await this.checkSecurity(args); break;
       case 'disassemble':
-        return this.disassemble(args);
+        result = await this.disassemble(args); break;
       case 'get_sections':
-        return this.getSections(args);
+        result = await this.getSections(args); break;
       case 'get_headers':
-        return this.getHeaders(args);
+        result = await this.getHeaders(args); break;
       case 'find_dangerous_patterns':
-        return this.findDangerousPatterns(args);
+        result = await this.findDangerousPatterns(args); break;
+      case 'trace_calls':
+        result = await this.traceCalls(args); break;
+      case 'inspect_carrier':
+        result = await this.inspectCarrier(args); break;
+      case 'find_gadget_candidates':
+        result = await this.findGadgetCandidates(args); break;
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
+    if (Buffer.byteLength(JSON.stringify(result)) > 64 * 1024) {
+      throw new Error('Result exceeds MCP response budget');
+    }
+    return result;
+  }
+
+  async traceCalls(args) {
+    const analysis = await this.analyzer.analyze(args.target_path);
+    return {
+      ...(await this.callSites.trace(analysis, {
+        sinks: args.sinks, arch: args.arch, limit: boundedInteger(args.limit, 100, 100)
+      })),
+      ...this.analysisState(analysis)
+    };
+  }
+
+  async inspectCarrier(args) {
+    return this.carriers.inspect(args.target_path, {
+      limit: boundedInteger(args.limit, 100, 200)
+    });
+  }
+
+  async findGadgetCandidates(args) {
+    const analysis = await this.analyzer.analyze(args.target_path);
+    return this.gadgets.find(analysis, {
+      limit: boundedInteger(args.limit, 50, 100)
+    });
   }
 
   async analyzeBinary(args) {
     const analysis = await this.analyzer.analyze(args.target_path, {
-      stringsMinLen: args.strings_min_len || 6
+      stringsMinLen: boundedInteger(args.strings_min_len, 6, 64)
     });
 
     return {
       success: true,
       target: analysis.target,
       security: analysis.security,
+      ...this.analysisState(analysis),
       summary: {
         symbol_count: analysis.symbols.length,
         import_count: analysis.imports.length,
@@ -204,18 +312,28 @@ export class AdversarialMCPServer {
         sections: analysis.sections.length
       },
       headers: analysis.headers?.parsed,
-      interesting_strings: analysis.strings.filter(s => s.interesting).slice(0, 50),
+      interesting_strings: analysis.strings.filter(s => s.interesting).slice(0, 20)
+        .map(s => safeString(s)),
       dangerous_imports: analysis.imports
         .map(s => {
           const base = (s.name?.replace(/^_+/, '') || '').replace(/@.*$/, '');
           const match = DANGEROUS_FUNCTIONS.find(d => d.name === base);
-          return match ? { ...s, risk: match } : null;
+          return match ? {
+            ...s,
+            status: 'candidate',
+            cwe_candidate: match.cwe,
+            note: 'Import presence does not establish a vulnerable call site or input flow'
+          } : null;
         })
-        .filter(Boolean)
+        .filter(Boolean).slice(0, 100)
     };
   }
 
   async getSymbols(args) {
+    if (args.filter !== undefined &&
+        (typeof args.filter !== 'string' || args.filter.length > 128)) {
+      throw new Error('Invalid symbol filter');
+    }
     const analysis = await this.analyzer.analyze(args.target_path);
     let symbols = analysis.symbols;
 
@@ -224,20 +342,25 @@ export class AdversarialMCPServer {
     else if (args.type === 'functions') symbols = analysis.functions;
 
     if (args.filter) {
-      const pattern = new RegExp(args.filter, 'i');
-      symbols = symbols.filter(s => pattern.test(s.name));
+      symbols = symbols.filter(s => s.name?.toLowerCase().includes(args.filter.toLowerCase()));
     }
 
     return {
       success: true,
       count: symbols.length,
-      symbols: symbols.slice(0, 500)
+      symbols: symbols.slice(0, 100).map(s => ({ ...s, name: s.name.slice(0, 160) })),
+      truncated: symbols.length > 100,
+      ...this.analysisState(analysis)
     };
   }
 
   async getStrings(args) {
+    if (args.category !== undefined &&
+        (typeof args.category !== 'string' || args.category.length > 64)) {
+      throw new Error('Invalid string category');
+    }
     const analysis = await this.analyzer.analyze(args.target_path, {
-      stringsMinLen: args.min_length || 6
+      stringsMinLen: boundedInteger(args.min_length, 6, 64)
     });
 
     let strings = analysis.strings;
@@ -253,7 +376,9 @@ export class AdversarialMCPServer {
     return {
       success: true,
       count: strings.length,
-      strings: strings.slice(0, 500)
+      strings: strings.slice(0, 100).map(s => safeString(s, args.reveal_sensitive === true)),
+      truncated: strings.length > 100,
+      ...this.analysisState(analysis)
     };
   }
 
@@ -268,7 +393,9 @@ export class AdversarialMCPServer {
       target: analysis.target,
       mitigations,
       security_score: score,
-      recommendations: this.getSecurityRecommendations(mitigations)
+      recommendations: this.getSecurityRecommendations(mitigations),
+      ...this.analysisState(analysis),
+      incomplete: this.analysisState(analysis).incomplete || score === null
     };
   }
 
@@ -288,29 +415,34 @@ export class AdversarialMCPServer {
     if (mitigations.fortify) score += 15;
 
     // Normalize to 100 for platform-fair comparison
-    return Math.round((score / maxScore) * 100);
+    return [mitigations.pie, mitigations.nx, mitigations.canary, mitigations.fortify].some(value => value == null) ||
+      !['full', 'partial', 'none', 'n/a'].includes(mitigations.relro)
+      ? null : Math.round((score / maxScore) * 100);
   }
 
   getSecurityRecommendations(mitigations) {
     const recs = [];
-    if (!mitigations.pie) recs.push('Enable PIE for ASLR support');
-    if (!mitigations.nx) recs.push('Enable NX/DEP to prevent shellcode execution');
-    if (!mitigations.canary) recs.push('Enable stack canaries to detect overflows');
-    if (mitigations.relro !== 'n/a' && mitigations.relro !== 'full') recs.push('Enable full RELRO to protect GOT');
-    if (!mitigations.fortify) recs.push('Compile with FORTIFY_SOURCE');
-    if (mitigations.stripped) recs.push('Binary is stripped - consider symbols for debugging');
+    if (mitigations.pie === false) recs.push('Enable PIE for ASLR support');
+    if (mitigations.nx === false) recs.push('Enable NX/DEP to prevent shellcode execution');
+    if (mitigations.canary === false) recs.push('Enable stack canaries to detect overflows');
+    if (mitigations.relro === 'none' || mitigations.relro === 'partial') recs.push('Enable full RELRO to protect GOT');
+    if (mitigations.fortify === false) recs.push('Compile with FORTIFY_SOURCE');
+    if (mitigations.stripped === true) recs.push('Binary is stripped - consider symbols for debugging');
     return recs;
   }
 
   async disassemble(args) {
     const result = await this.analyzer.disassemble(args.target_path, {
-      function: args.function
+      function: args.function,
+      limit: boundedInteger(args.limit, 500, 500)
     });
 
     return {
-      success: true,
+      success: !result.error,
       function: args.function || 'all',
-      disassembly: result.raw?.slice(0, 50000),
+      disassembly: result.raw?.slice(0, 20000),
+      truncated: result.truncated || result.raw.length > 20000,
+      incomplete: Boolean(result.error || result.truncated || result.raw.length > 20000),
       error: result.error
     };
   }
@@ -320,13 +452,14 @@ export class AdversarialMCPServer {
 
     return {
       success: true,
-      sections: analysis.sections,
+      sections: analysis.sections.slice(0, 100),
+      ...this.analysisState(analysis),
       executable_sections: analysis.sections.filter(s =>
         s.name?.includes('text') || s.name?.includes('code')
-      ),
+      ).slice(0, 100),
       data_sections: analysis.sections.filter(s =>
         s.name?.includes('data') || s.name?.includes('bss') || s.name?.includes('rodata')
-      )
+      ).slice(0, 100)
     };
   }
 
@@ -336,7 +469,12 @@ export class AdversarialMCPServer {
     return {
       success: true,
       target: analysis.target,
-      headers: analysis.headers
+      ...this.analysisState(analysis),
+      headers: {
+        parsed: analysis.headers?.parsed,
+        raw: analysis.headers?.raw?.slice(0, 10000),
+        error: analysis.headers?.error
+      }
     };
   }
 
@@ -352,12 +490,13 @@ export class AdversarialMCPServer {
       for (const dangerous of DANGEROUS_FUNCTIONS) {
         if (symBase === dangerous.name) {
           findings.push({
-            type: 'dangerous_import',
+            type: 'import_observation',
             function: sym.name,
             address: sym.address,
             cwe: dangerous.cwe,
-            risk: dangerous.risk,
-            severity: this.getSeverity(dangerous.cwe)
+            risk: `Review call sites: ${dangerous.risk}; import alone does not prove exploitability`,
+            status: 'candidate',
+            severity: 'medium'
           });
         }
       }
@@ -367,59 +506,67 @@ export class AdversarialMCPServer {
     for (const str of analysis.strings.filter(s => s.interesting)) {
       if (str.category === 'credential_related') {
         findings.push({
-          type: 'hardcoded_credential',
-          value: str.value.slice(0, 100),
+          type: 'string_observation',
+          value: '[REDACTED]',
           cwe: 'CWE-798',
-          risk: 'Potential hardcoded secret',
-          severity: 'high'
+          risk: 'Credential-related string; no secret or usage confirmed',
+          status: 'candidate',
+          severity: 'medium'
         });
       } else if (str.category === 'crypto_material') {
         findings.push({
-          type: 'embedded_key',
-          value: str.value.slice(0, 50) + '...',
+          type: 'string_observation',
+          value: '[REDACTED]',
           cwe: 'CWE-321',
-          risk: 'Embedded cryptographic key',
-          severity: 'critical'
+          risk: 'Key-like string; key material and usage not verified',
+          status: 'candidate',
+          severity: 'medium'
         });
       } else if (str.category === 'sql') {
         findings.push({
-          type: 'sql_query',
-          value: str.value.slice(0, 100),
+          type: 'string_observation',
+          value: '[REDACTED]',
           cwe: 'CWE-89',
-          risk: 'Potential SQL injection if user-controlled',
+          risk: 'SQL-like string; no user-controlled flow confirmed',
+          status: 'candidate',
           severity: 'medium'
         });
       }
     }
 
     // Security posture issues
-    if (!analysis.security.pie) {
+    if (analysis.security.pie === false) {
       findings.push({
-        type: 'missing_mitigation',
+        type: 'mitigation_observation',
         mitigation: 'PIE',
-        cwe: 'CWE-119',
-        risk: 'No ASLR - fixed addresses exploitable',
+        cwe: 'CWE-693',
+        risk: 'PIE not detected; this does not establish exploitability',
+        status: 'observed',
         severity: 'medium'
       });
     }
-    if (!analysis.security.canary) {
+    if (analysis.security.canary === false) {
       findings.push({
-        type: 'missing_mitigation',
+        type: 'mitigation_observation',
         mitigation: 'Stack Canary',
-        cwe: 'CWE-119',
-        risk: 'Stack buffer overflows easier to exploit',
+        cwe: 'CWE-693',
+        risk: 'Canary not detected; no overflow established',
+        status: 'observed',
         severity: 'medium'
       });
     }
 
+    const limited = findings.slice(0, 100);
     return {
       success: true,
       target: analysis.target,
-      finding_count: findings.length,
-      critical: findings.filter(f => f.severity === 'critical').length,
-      high: findings.filter(f => f.severity === 'high').length,
-      medium: findings.filter(f => f.severity === 'medium').length,
-      findings
+      ...this.analysisState(analysis),
+      finding_count: limited.length,
+      critical: limited.filter(f => f.severity === 'critical').length,
+      high: limited.filter(f => f.severity === 'high').length,
+      medium: limited.filter(f => f.severity === 'medium').length,
+      findings: limited,
+      truncated: findings.length > 100
     };
   }
 

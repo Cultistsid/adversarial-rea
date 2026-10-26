@@ -1,12 +1,12 @@
 /**
  * Attack Surface Enumerator
  *
- * Aggressive multi-vector attack surface discovery.
- * Maps all potential entry points, trust boundaries, and exploitation primitives.
+ * Proposes attack-surface review candidates from bounded native telemetry.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import { BinaryAnalyzer } from './binary-analyzer.js';
+import { summarizeBinaryForPrompt } from './model-context.js';
 
 const ATTACK_VECTORS = {
   // Network-facing
@@ -47,26 +47,12 @@ export class AttackSurfaceEnumerator {
     this.analyzer = new BinaryAnalyzer();
   }
 
-  async extractBinaryContext(target) {
-    try {
-      const data = await this.analyzer.analyze(target.path);
-      const dangerousNames = ['strcpy','sprintf','gets','system','popen','execve','printf','fprintf','malloc','free','realloc'];
-      const dangerous = data.imports
-        .filter(s => dangerousNames.some(d => (s.name?.replace(/^_+/,'') || '').replace(/@.*$/,'') === d))
-        .map(s => s.name).join(', ') || 'none detected';
-      return `BINARY ANALYSIS DATA (real extracted data):
-- Type: ${data.target.type}, Size: ${data.target.size} bytes
-- Security: PIE=${data.security.pie}, NX=${data.security.nx}, Canary=${data.security.canary}, RELRO=${data.security.relro}, Fortify=${data.security.fortify}
-- Imports (${data.imports.length} total): ${data.imports.slice(0, 50).map(s => s.name).join(', ')}
-- Interesting strings (${data.strings.filter(s => s.interesting).length}): ${data.strings.filter(s => s.interesting).slice(0, 30).map(s => `"${s.value}" [${s.category}]`).join(', ')}
-- Sections: ${data.sections.map(s => `${s.name}(${s.size}b)`).join(', ')}
-- Dangerous imports: ${dangerous}`;
-    } catch (e) {
-      return `Target: ${target.path} (binary extraction failed: ${e.message})`;
-    }
+  async extractBinaryContext(target, binaryAnalysis = null) {
+    const data = binaryAnalysis || await this.analyzer.analyze(target.path);
+    return summarizeBinaryForPrompt(data);
   }
 
-  async enumerate(target) {
+  async enumerate(target, binaryAnalysis = null) {
     const surface = {
       target,
       vectors: [],
@@ -74,11 +60,12 @@ export class AttackSurfaceEnumerator {
       primitives: [],
       dependencies: [],
       mitigations: [],
-      score: 0,
+      score: null,
+      candidate_score: 0,
       timestamp: new Date().toISOString()
     };
 
-    const binaryContext = await this.extractBinaryContext(target);
+    const binaryContext = await this.extractBinaryContext(target, binaryAnalysis);
 
     // Parallel enumeration phases
     const [vectors, boundaries, primitives] = await Promise.all([
@@ -87,10 +74,10 @@ export class AttackSurfaceEnumerator {
       this.findPrimitives(target, binaryContext)
     ]);
 
-    surface.vectors = vectors;
-    surface.boundaries = boundaries;
-    surface.primitives = primitives;
-    surface.score = this.calculateAttackScore(surface);
+    surface.vectors = vectors.map(v => ({ ...v, status: 'candidate' }));
+    surface.boundaries = boundaries.map(b => ({ ...b, status: 'candidate' }));
+    surface.primitives = primitives.map(p => ({ ...p, status: 'candidate' }));
+    surface.candidate_score = this.calculateAttackScore(surface);
 
     return surface;
   }
@@ -100,7 +87,8 @@ export class AttackSurfaceEnumerator {
 
 ${binaryContext}
 
-For each input handler or data processing function found in the imports/symbols above, document it. Focus on functions that accept external data (network, files, user input, IPC).
+For each possible input handler found in the imports above, list a review hypothesis.
+Do not infer a real entry point or an attacker-controlled flow from import presence.
 
 Return ONLY a JSON array, no explanation:
 [{
@@ -127,7 +115,8 @@ Return ONLY a JSON array, no explanation:
 
 ${binaryContext}
 
-Look for boundary transitions in the imports and strings: network calls, privilege-changing syscalls, IPC mechanisms, authentication functions, file permission operations.
+Propose possible boundaries suggested by the listed imports; do not claim that
+an actual boundary crossing is proven without call-site evidence.
 
 Return ONLY a JSON array, no explanation:
 [{
@@ -154,7 +143,8 @@ Return ONLY a JSON array, no explanation:
 
 ${binaryContext}
 
-For each memory-unsafe function in the imports above (strcpy, sprintf, gets, malloc, free, realloc, etc.), document the memory safety concern it represents.
+List potential memory-safety review questions suggested by the imports.
+An import is not an observed read/write primitive or vulnerability.
 
 Return ONLY a JSON array, no explanation:
 [{
@@ -177,37 +167,32 @@ Return ONLY a JSON array, no explanation:
   }
 
   getTextContent(response) {
-    return response.content.find(b => b.type === 'text')?.text || '';
+    return response?.content?.find(b => b.type === 'text')?.text || '';
   }
 
   parseVectors(response) {
-    try {
-      const content = this.getTextContent(response) || '[]';
-      const match = content.match(/\[[\s\S]*\]/);
-      return match ? JSON.parse(match[0]) : [];
-    } catch {
-      return [];
-    }
+    return this.parseArray(response, 'vectors');
   }
 
   parseBoundaries(response) {
-    try {
-      const content = this.getTextContent(response) || '[]';
-      const match = content.match(/\[[\s\S]*\]/);
-      return match ? JSON.parse(match[0]) : [];
-    } catch {
-      return [];
-    }
+    return this.parseArray(response, 'boundaries');
   }
 
   parsePrimitives(response) {
+    return this.parseArray(response, 'primitives');
+  }
+
+  parseArray(response, name) {
     try {
-      const content = this.getTextContent(response) || '[]';
+      const content = this.getTextContent(response);
       const match = content.match(/\[[\s\S]*\]/);
-      return match ? JSON.parse(match[0]) : [];
+      const parsed = match ? JSON.parse(match[0]) : null;
+      if (Array.isArray(parsed) && parsed.every(item =>
+        item && typeof item === 'object' && !Array.isArray(item))) return parsed;
     } catch {
-      return [];
+      // Invalid output is incomplete, not evidence that nothing was found.
     }
+    throw new Error(`Review response could not be parsed as ${name}`);
   }
 
   calculateAttackScore(surface) {

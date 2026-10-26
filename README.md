@@ -1,35 +1,35 @@
 <div align="center">
 
-# Adversarial REA: Offensive Binary Exploitation Harness
+# Adversarial REA: Evidence-First Binary Triage
 
-### One MCP server and multi-agent swarm engine for attack surface mapping, vulnerability hunting, and exploit chain synthesis.
+### Local native telemetry, bounded MCP tools, and unverified review candidates.
 
-**Drop a binary in. Extract ground-truth telemetry. Weaponize findings into multi-stage chains.**
+**Start with what the binary says. Mark everything else as a question.**
 
 [![npm version](https://img.shields.io/badge/version-0.1.0-cb3837?style=flat-square)](package.json)
-[![MCP tool catalog](https://img.shields.io/badge/MCP-8_native_tools-5c4ee5?style=flat-square)](#mcp-tool-catalog)
+[![MCP tool catalog](https://img.shields.io/badge/MCP-11_local_tools-5c4ee5?style=flat-square)](#mcp-tool-catalog)
 [![Node.js requirements](https://img.shields.io/badge/Node.js-%3E%3D22.0.0-339933?style=flat-square&logo=nodedotjs&logoColor=white)](#what-you-can-analyze)
 [![Swarm roles](https://img.shields.io/badge/Swarm-8_offensive_roles-ef4444?style=flat-square)](#agent-swarm-roles)
-[![CWE coverage](https://img.shields.io/badge/CWE-19_patterns-f97316?style=flat-square)](#vulnerability-patterns-cwe-coverage)
+[![CWE coverage](https://img.shields.io/badge/CWE-review_patterns-f97316?style=flat-square)](#vulnerability-patterns-cwe-coverage)
 [![MIT license](https://img.shields.io/badge/license-MIT-f4c430?style=flat-square)](LICENSE)
 
 **[MCP Guide](MCP_USAGE.md) · [Tool Catalog](#mcp-tool-catalog) · [Showcases](#showcases)**
 
 [Quick start](#quick-start) · [How Adversarial REA works](#how-adversarial-rea-works) · [What you can analyze](#what-you-can-analyze) · [Swarm roles](#agent-swarm-roles) · [Showcases](#showcases) · [Exploit chains](#exploit-chain-templates) · [FAQ](#faq) · [Documentation](#documentation)
 
-<code>npx adv-rea analyze ./target.elf --agents 8</code>
+<code>node bin/cli.js analyze ./target.elf --no-chain</code>
 
 </div>
 
 > [!IMPORTANT]
 > Get **Adversarial REA** from [Cultistsid/adversarial-rea](https://github.com/Cultistsid/adversarial-rea).
-> All binary telemetry extraction (`objdump`, `nm`, `strings`, `otool`, `file`) runs locally on your machine against real on-disk binaries—never fabricated or hallucinated.
+> Native telemetry extraction runs locally. Imports, strings, call sites, gadget candidates, and generated review candidates are **not verified vulnerabilities**. Call-site evidence is available, but source-to-sink flow and observed trigger evidence are not produced by this release; chains remain blocked without them.
 
 <div align="center">
 
 <br />
 
-<img src="docs/assets/adversarial-hero.svg" alt="Adversarial REA launching its static extraction bridge and 8-agent exploitation swarm against a native ELF binary" width="1200" />
+<img src="docs/assets/adversarial-hero.svg" alt="Illustrative future analysis workflow, not a live exploit result" width="1200" />
 
 <br /><br />
 
@@ -37,9 +37,9 @@
 
 ---
 
-Need to tear apart a native binary, driver, mobile package, or firmware image without source code? Connect your MCP client to **Adversarial REA** or launch `adv-rea` straight from your terminal. It inspects the binary on disk, extracts real symbols, sections, classified strings, and exploit mitigations, and deploys an 8-role parallel swarm to hunt vulnerabilities and assemble multi-stage exploit chains.
+Need a first-pass review of a native binary without source code? Connect your MCP client to **Adversarial REA** or use `adv-rea` from a terminal. It extracts bounded symbols, strings, sections, and mitigation signals from local files, then offers follow-up questions rather than claiming that a risky import proves a bug.
 
-Adversarial REA bridges deterministic binary inspection (`objdump`, `nm`, `strings`, `otool`, `file`) with multi-agent offensive workflows across ELF, Mach-O, PE, Android APK, iOS IPA, Electron ASAR, WebAssembly, and raw firmware targets. Every reported finding includes its CWE classification, trigger conditions, mitigation posture, and exploitation feasibility score.
+Use it to narrow manual review: identify suspicious imports, inspect observed call instructions, and distinguish unknown mitigations from observed absences. Native ELF and Mach-O extraction use host tools; PE headers and mitigation *flags* can be previewed without host PE tools. Packages, archives, WebAssembly, firmware images, text, and JavaScript receive bounded metadata inspection, **not** deep code or exploit analysis.
 
 ---
 
@@ -69,35 +69,41 @@ Add `adversarial-rea` to your MCP client configuration (`mcp.json`):
 }
 ```
 
-Restart your MCP client after saving. All 8 binary inspection tools register over stdio JSON-RPC 2.0 and require **zero external API keys**.
+Restart your MCP client after saving. All 11 inspection tools register over stdio JSON-RPC 2.0 and require **zero external API keys**.
 
 ### Ask your agent
 
 ```text
-Run analyze_binary and find_dangerous_patterns on ./target.elf, disassemble any
-function that references strcpy or system, and rank the most feasible RCE chain.
+Run analyze_binary and trace_calls on ./target.elf. Compare import observations
+with actual call instructions; do not claim an input flow or bug from either.
 ```
 
-Replace `./target.elf` with any local ELF, Mach-O, PE, or firmware binary you want to tear down.
+Replace `./target.elf` with a native ELF or Mach-O file. For a script or container, use `inspect_carrier` instead. PE code extraction depends on your host `objdump`/`nm` build.
 
 ### Use the terminal
 
-Run the full 3-phase offensive pipeline (`Recon` → `Hunt` → `Chain`) directly from your shell:
+Run local inspection without a key; the separate candidate-triage commands use a remote reasoning service and require its API key.
 
 ```bash
-# Full analysis pipeline — 8 parallel agents, PE target
-npx adv-rea analyze ./target.exe --agents 8 --type pe --output results.json
+# Offline metadata for APK/IPA/JAR/ASAR, Wasm, JS/text, PE, firmware, or .app bundles
+node bin/cli.js inspect ./package.apk --limit 50
+
+# Offline call sites on native files, or byte-verified gadget candidates on ELF64 x86_64
+node bin/cli.js inspect ./target.elf --calls --gadgets
+
+# Candidate analysis on a native ELF file
+node bin/cli.js analyze ./target.elf --agents 8 --trace-calls --no-chain --output results.json
 
 # Deploy a targeted agent swarm with custom mission and offensive roles
-npx adv-rea swarm ./target.elf \
-  --mission "Find heap corruption and ASLR leak primitives" \
+node bin/cli.js swarm ./target.elf \
+  --mission "Review possible heap corruption and address leaks" \
   --roles mem-corrupt,mitigation-bypass
 
-# Vulnerability hunt — surface critical CWE patterns only
-npx adv-rea hunt ./target.apk --critical-only
+# Triage selected CWE patterns (candidate findings only)
+node bin/cli.js hunt ./target.elf --patterns UNCHECKED_BOUNDS,FORMAT_STRING --critical-only
 
 # Attack surface enumeration only (vectors, trust boundaries, primitives)
-npx adv-rea surface ./libtarget.so --type elf-shared
+node bin/cli.js surface ./libtarget.so --type elf
 ```
 
 To install the `adv-rea` command globally for regular terminal use:
@@ -111,36 +117,38 @@ adv-rea --help
 
 ## How Adversarial REA works
 
-Your MCP client or CLI invocation calls Adversarial REA to extract ground-truth binary structure first, then layers parallel offensive reasoning over those extracted facts. Every claim is anchored to real symbol offsets, section flags, string literals, and mitigation headers.
+The native analyzer reads a regular file (up to 64 MiB), identifies its magic bytes, and invokes local tools with argument arrays, timeouts, and output limits. The separate carrier inspector reads bounded headers and indexes without unpacking or executing content. Extraction failures remain visible; unknown mitigation status is not converted to "off." Optional reasoning only receives a bounded structural summary, never extracted secret-like string values by default.
 
 <div align="center">
 
-<img src="docs/assets/adversarial-flow.svg" alt="Adversarial REA 4-stage pipeline: Binary Telemetry, Attack Surface Map, 8-Role Vuln Swarm, and Exploit Chain Synthesis" width="1100" />
+<img src="docs/assets/adversarial-flow.svg" alt="Illustrative architecture showing planned evidence-backed chain analysis" width="1100" />
 
 </div>
 
-1. **Deterministic Telemetry (`BinaryAnalyzer`)** — Executes `objdump`, `nm`, `strings`, `otool`, and `file` to collect imports, exports, function symbols, section permissions, categorized strings, and platform-normalized mitigation scores.
-2. **Attack Surface Enumeration (`AttackSurfaceEnumerator`)** — Deploys parallel tasks to map entry vectors (network listeners, file parsers, IPC handlers), trust boundaries (`user↔kernel`, `renderer↔broker`, `pre-auth↔post-auth`), and exploitation primitives.
-3. **Parallel Swarm Hunting (`AgentSwarm` + `VulnHunter`)** — Matches 19 CWE patterns against extracted imports/strings and dispatches up to 8 concurrent specialist roles via `p-limit`.
-4. **Exploit Chain Synthesis (`ExploitChainBuilder`)** — Matches discovered vulnerabilities against 6 multi-stage exploitation templates, scores stage coverage, and generates PoC skeletons.
+1. **Local telemetry (`BinaryAnalyzer`, `CarrierInspector`)** — Native metadata or metadata-only previews for other file formats; carrier previews do not imply code parsing.
+2. **Instruction evidence (`CallSiteExtractor`, `GadgetCandidateFinder`)** — Opt-in direct call instructions with target hashes and versioned evidence IDs; selected ELF64 x86_64 gadget candidates are checked against executable file bytes. Neither proves reachable input flow or exploitability.
+3. **Review hypotheses (`AttackSurfaceEnumerator`, `VulnHunter`)** — Suggests possible vectors and CWE follow-up checks. Triage scores and remote answers remain unverified.
+4. **Evidence gate (`ExploitChainBuilder`)** — Requires independently verified flow, stage references, and an observed trigger trace. Those flow/trigger producers are not implemented; ordinary analyses return no validated exploit chain.
 
 ---
 
 ## What you can analyze
 
-Adversarial REA auto-detects target formats by extension or accepts an explicit `--type` override:
+The file signature decides the native format; `--type` only asserts an expected native format. Use `inspect_carrier` or `adv-rea inspect` for metadata-only carriers; the native `analyze_binary` tool still rejects them.
 
-| Target                  | What Adversarial REA returns                                                                      | Underlying primitives &amp; default swarm roles                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Linux ELF** (`.elf`, `.so`) | Dynamic/static symbols, PLT/GOT imports, `GNU_STACK` &amp; `GNU_RELRO` posture, disassembly, RCE chains | `objdump`, `nm`, `strings`, `file` · Roles: `mem-corrupt`, `mitigation-bypass`, `priv-esc`, `input-inject` |
-| **macOS Mach-O** (`.dylib`, `.app`) | Mach-O header flags (`MH_PIE`, stack execution), fortified symbols (`_*_chk`), section layout, strings | `otool -hv`, `objdump -h`, `nm`, `strings` · Normalized 0–100 score (excludes ELF-only RELRO)         |
-| **Windows PE** (`.exe`, `.dll`) | Import/export tables, dangerous Win32/CRT sinks (`ShellExecute`, `WinExec`, `HeapAlloc`), CFG/DEP chain paths | `objdump`, `nm`, `strings` · Roles: `mem-corrupt`, `mitigation-bypass`, `priv-esc`, `input-inject`     |
-| **Kernel Drivers** (`.sys`) | IOCTL dispatch surface, kernel/user trust boundaries, token-stealing &amp; cred-overwrite chains | Roles: `mem-corrupt`, `priv-esc`, `mitigation-bypass` · Templates: `PRIV_ESC_WINDOWS` / `PRIV_ESC_LINUX` |
-| **Android Packages** (`.apk`) | Native JNI library symbols, hardcoded secrets/URLs, intent/IPC injection sinks, supply-chain risks | Roles: `logic-flaw`, `crypto-weak`, `input-inject`, `supply-chain`                                    |
-| **iOS Packages** (`.ipa`) | Mach-O binary headers, entitlement/keychain string artifacts, crypto weakness &amp; ASLR bypass analysis | Roles: `logic-flaw`, `crypto-weak`, `mitigation-bypass`                                               |
-| **Electron Archives** (`.asar`) | Renderer-to-main IPC boundaries, preload bridge sinks, command injection &amp; protocol abuse vectors | Roles: `input-inject`, `logic-flaw`, `supply-chain`, `protocol-abuse` · Template: `SANDBOX_ESCAPE`     |
-| **WebAssembly** (`.wasm`) | Linear memory bounds, imported host bindings, integer overflow &amp; logic flaw primitives            | Roles: `mem-corrupt`, `logic-flaw`, `crypto-weak`                                                     |
-| **Embedded Firmware** (`.bin`, `.fw`) | Extracted credentials, PEM/private keys, `system`/`popen` command sinks, protocol parser bugs    | Roles: `mem-corrupt`, `crypto-weak`, `priv-esc`, `protocol-abuse`                                     |
+| Input | Status | What works |
+| ----- | ------ | ---------- |
+| ELF native file | Native triage where `objdump`, `nm`, and `strings` are available | Bounded metadata, disassembly, RELRO signals, opt-in call sites, and byte-verified gadget candidates **only for ELF64 x86_64** |
+| Mach-O native file | Native triage on macOS | Bounded metadata and mitigation signals; opt-in direct call sites select the host architecture by default (including `arm64e`) |
+| PE native file (including drivers) | Experimental | `inspect_carrier` reads section metadata and declared ASLR/NX/CFG flags. Native code/symbol extraction depends on host tools; IOCTL/data-flow analysis is **not** implemented |
+| Text / JavaScript | Metadata-only | Byte and line counts; **no** AST or dependency analysis |
+| `.app` directories | Metadata-only | `Contents` entry listing without following child symlinks; no bundle code/IPC parser |
+| APK / IPA / JAR / ZIP | Metadata-only | Bounded ZIP central-directory listing and path/encryption flags; no unpacking or manifest analysis; ZIP64/multi-disk unsupported |
+| ASAR archives | Metadata-only | Bounded header file index and declared file offsets; no script execution, AST, or IPC analysis |
+| WebAssembly | Metadata-only | Version 1 section offsets/sizes; no instruction decoder |
+| Raw `.bin` / `.fw` firmware | Metadata-only | ELF *magic* offset if present; no filesystem extraction or executable verification |
+
+Large files (over 64 MiB) and non-regular files are rejected. Each native subprocess has a 15-second timeout and a 2 MiB output cap; truncated or unavailable evidence is not treated as proof of safety. For an MCP client that should see only one directory, set `ADV_REA_ALLOWED_ROOTS=/absolute/path/to/targets` in its server environment. Without it, any readable local regular file can be submitted for inspection.
 
 <a id="mcp-tool-catalog"></a>
 
@@ -150,33 +158,38 @@ Every tool exposed by `src/mcp/main.js` runs locally with zero network dependenc
 
 | Tool | What it extracts | Key arguments |
 | ---- | ---------------- | ------------- |
-| `analyze_binary` | Full one-shot profile: file metadata, symbol counts, security mitigations, classified strings, and dangerous imports | `target_path`, `strings_min_len` *(default: 6)* |
-| `get_symbols` | Symbol table entries filtered by class (`all`, `imports`, `exports`, `functions`) and optional regex | `target_path`, `type`, `filter` |
-| `get_strings` | ASCII strings classified into 9 security categories (`credential_related`, `crypto_material`, `url`, `path`, `sql`, etc.) | `target_path`, `min_length`, `interesting_only`, `category` |
-| `check_security` | Platform-aware PIE, NX, Stack Canary, RELRO, FORTIFY, and symbol-stripping detection with 0–100 score | `target_path` |
-| `disassemble` | Full binary or single-function disassembly via `objdump -d` with line bounding | `target_path`, `function`, `limit` *(default: 200)* |
-| `get_sections` | Binary sections with hex/byte sizes, file offsets, and executable vs. data split | `target_path` |
-| `get_headers` | Architecture, entry point, and format headers (`otool -hv` / `objdump -f`) | `target_path` |
-| `find_dangerous_patterns` | Exact-matched dangerous imports, hardcoded secret strings, SQL fragments, and missing mitigations tagged by CWE | `target_path` |
+| `analyze_binary` | File identity (SHA-256), counts, mitigation signals, redacted string samples, import observations | `target_path`, `strings_min_len` (1–64) |
+| `get_symbols` | Up to 100 symbols, optionally filtered by literal substring | `target_path`, `type`, `filter` |
+| `get_strings` | Up to 100 categorized strings, sensitive categories redacted by default | `target_path`, `min_length` (1–64), `interesting_only`, `category`, `reveal_sensitive` |
+| `check_security` | Known/unknown mitigation signals and a score only if all required checks succeeded | `target_path` |
+| `disassemble` | Up to 500 disassembly lines (20 KiB returned) | `target_path`, `function`, `limit` |
+| `get_sections` | Bounded native section listing | `target_path` |
+| `get_headers` | Bounded native headers | `target_path` |
+| `find_dangerous_patterns` | Unverified import/string observations and observed missing mitigation signals | `target_path` |
+| `trace_calls` | Decoded direct native calls with target hash and provider version; input flow unknown | `target_path`, `sinks`, `arch`, `limit` |
+| `find_gadget_candidates` | ELF64 x86_64 gadget candidates verified against executable file bytes; runtime addresses unknown | `target_path`, `limit` |
+| `inspect_carrier` | Bounded metadata for ZIP/APK/IPA/JAR/ASAR, Wasm, JS/text, PE, firmware, and `.app` | `target_path`, `limit` |
+
+Responses are capped at 64 KiB. `get_strings` intentionally requires `reveal_sensitive: true` to show potentially sensitive string categories; handle that output locally.
 
 ### Platform-Normalized Mitigation Scoring
 
-`check_security` normalizes security scores to `100` per binary format. Because `RELRO` is an ELF-specific concept, it is excluded from the Mach-O denominator—so a fully hardened macOS binary scores `100/100` rather than being capped at `85`.
+`check_security` reports `null` when any required check is unknown. Where checks succeed, RELRO is ELF-only and excluded from the Mach-O denominator.
 
 | Mitigation | Weight | macOS (`Mach-O`) Detection | Linux (`ELF`) Detection |
 | ---------- | :----: | -------------------------- | ----------------------- |
 | **PIE** | `20` | `MH_PIE` flag via `otool -hv` | `ET_DYN` / `DYNAMIC` in `objdump -f` |
-| **NX** | `20` | Absence of `ALLOW_STACK_EXECUTION` flag | `GNU_STACK` header without `E` flag |
-| **Stack Canary** | `20` | `__stack_chk_fail` / `__stack_chk_guard` symbol | `__stack_chk_fail` symbol |
-| **RELRO** | `15` / `7` | `n/a` *(excluded from Mach-O max)* | `GNU_RELRO` + `BIND_NOW` (`full` = 15, `partial` = 7) |
+| **NX** | `25` | Absence of `ALLOW_STACK_EXECUTION` flag | Stack header without executable flag |
+| **Stack Canary** | `25` | `__stack_chk_*` symbol | `__stack_chk_*` symbol |
+| **RELRO** | `15` / `10` | `n/a` *(excluded from Mach-O max)* | `GNU_RELRO` + `BIND_NOW` (`full` = 15, `partial` = 10) |
 | **FORTIFY** | `15` | `__memcpy_chk`, `__sprintf_chk`, `_*_chk` imports | `_*_chk` fortified symbol imports |
-| **Stripped** | `10` | Total symbol count `< 10` | Total symbol count `< 10` |
+| **Stripped** | No score weight | `file` explicit label or `unknown` | `file` explicit label or `unknown` |
 
 ---
 
 ## Agent swarm roles
 
-Eight specialist roles execute in parallel during `adv-rea analyze` and `adv-rea swarm`:
+Eight specialist roles are available for `adv-rea swarm`; `adv-rea analyze` selects triage patterns rather than deploying all eight. A role's output is a review hypothesis, not proof.
 
 | Role ID | Specialist Name | Offensive Focus Areas |
 | ------- | --------------- | --------------------- |
@@ -192,31 +205,18 @@ Eight specialist roles execute in parallel during `adv-rea analyze` and `adv-rea
 ### Vulnerability Patterns (CWE Coverage)
 
 <details>
-<summary><strong>View all 19 CWE vulnerability signatures (Critical, High, Medium)</strong></summary>
+<summary><strong>View the 16 CWE-oriented triage patterns</strong></summary>
 
 <br />
 
-| Severity | CWE | Pattern Class | Monitored Sinks &amp; Indicators |
-| -------- | --- | ------------- | -------------------------------- |
-| **Critical** | `CWE-120` | Buffer Copy Without Checking Size | `strcpy`, `strcat`, `gets`, `sprintf`, `vsprintf`, `scanf` |
-| **Critical** | `CWE-122` | Heap-Based Buffer Overflow | `malloc`, `calloc`, `realloc`, `HeapAlloc` size arithmetic |
-| **Critical** | `CWE-416` | Use After Free | Post-`free` / `delete` pointer reuse across error paths |
-| **Critical** | `CWE-415` | Double Free | Duplicate deallocation in cleanup handlers |
-| **Critical** | `CWE-843` | Type Confusion | Unsafe casts, union discriminator mismatches, vtable corruption |
-| **Critical** | `CWE-78` | OS Command Injection | `system`, `popen`, `execve`, `execl`, `execvp`, `ShellExecute`, `WinExec` |
-| **High** | `CWE-134` | Uncontrolled Format String | `printf`, `fprintf`, `sprintf`, `snprintf`, `syslog` |
-| **High** | `CWE-190` | Integer Overflow or Wraparound | Unchecked multiplication/addition before buffer allocation |
-| **High** | `CWE-287` | Improper Authentication | `authenticate`, `login`, `verify_password`, `check_auth` |
-| **High** | `CWE-798` | Hardcoded Credentials | `password`, `passwd`, `pwd`, `secret`, `api_key`, `apikey`, `token` |
-| **High** | `CWE-321` | Hardcoded Cryptographic Key | Embedded PEM blocks, static AES/HMAC/private key buffers |
-| **High** | `CWE-327` | Broken Crypto Algorithm | `DES_`, `RC4`, ECB block cipher usage |
-| **High** | `CWE-328` | Reversible One-Way Hash | `MD5_Init`, `MD5_Update`, `SHA1_Init`, `SHA1_Update` |
-| **Medium** | `CWE-22` | Path Traversal | `fopen`, `open`, `stat`, `access`, `CreateFile` |
-| **Medium** | `CWE-89` | SQL Injection | `sqlite3_exec`, `mysql_query`, `PQexec`, raw SQL query strings |
-| **Medium** | `CWE-338` | Weak PRNG | `rand`, `srand`, `random` in security-sensitive contexts |
-| **Medium** | `CWE-732` | Incorrect Permission Assignment | `chmod`, `fchmod`, `chown`, `umask` |
-| **Medium** | `CWE-770` | Allocation Without Limits | Unbounded `alloca` on stack frames |
-| **Medium** | `CWE-119` | Missing Exploit Mitigations | Non-PIE executable or missing stack canary |
+| Area | Pattern IDs | What an indicator means |
+| ---- | ----------- | ----------------------- |
+| Memory | `UNCHECKED_BOUNDS`, `INTEGER_OVERFLOW`, `USE_AFTER_FREE`, `DOUBLE_FREE`, `TYPE_CONFUSION`, `UNINITIALIZED_MEMORY` | A possible code path to inspect; no reachability or memory violation has been established |
+| Logic | `RACE_CONDITION`, `AUTH_BYPASS`, `AUTHZ_BYPASS` | Names and hypotheses to verify against control flow |
+| Injection | `COMMAND_INJECTION`, `FORMAT_STRING`, `PATH_TRAVERSAL`, `DESERIALIZATION` | Sink presence alone does not establish attacker control |
+| Crypto | `WEAK_CRYPTO`, `HARDCODED_SECRET`, `IV_REUSE` | Review flags only; extracted secrets are withheld from prompts |
+
+The `--critical-only` CLI flag filters the *pattern's triage priority*, not a verified finding's severity.
 
 </details>
 
@@ -226,27 +226,29 @@ Eight specialist roles execute in parallel during `adv-rea analyze` and `adv-rea
 
 <div align="center">
 
-<img src="docs/assets/adversarial-showcases.svg" alt="Adversarial REA showcases: Format String Leak to ROP Chain, IPC Broker Sandbox Breakout, and Embedded Firmware Triage" width="1100" />
+<img src="docs/assets/adversarial-showcases.svg" alt="Concept illustrations of future analysis scenarios, not verified tool output" width="1100" />
 
 </div>
 
-### 1. Linux ELF: Format string leak to 5-stage ROP chain
+**The visual panels are illustrative, not generated results.** No addresses, chain scores, or exploit stages in the artwork correspond to a validated fixture.
 
-Inspect an unstripped ELF service binary with `analyze_binary`, flag an uncontrolled `printf` (`CWE-134`) alongside a stack `strcpy` (`CWE-120`), and automatically assemble the `CODE_EXEC_LINUX` template (`info_leak` → `memory_corruption` → `control_flow_hijack` → `rop_chain` → `shellcode_exec`).
+### Native ELF import triage (available)
 
-### 2. Desktop / Electron: IPC broker boundary breakout
+Run `analyze_binary` and `find_dangerous_patterns` to identify `printf`/`strcpy` imports for review, then `trace_calls` to locate decoded calls. Verify the controlled data flow and trigger separately; even an observed call does not prove a bug.
 
-Enumerate renderer-to-broker trust boundaries with `adv-rea surface`, deploy the `input-inject` and `protocol-abuse` swarm roles to audit message deserialization handlers, and score `SANDBOX_ESCAPE` chains.
+### Electron IPC boundary mapping (planned)
 
-### 3. Embedded Firmware: Hardcoded crypto & command injection triage
+`inspect_carrier` lists bounded ASAR file entries. IPC brokers, renderer messages, and sandbox boundaries still require dedicated parsing and observed evidence.
 
-Extract `crypto_material` and `credential_related` strings from a raw `.bin` image via `get_strings`, cross-reference `popen`/`system` symbol imports with `get_symbols`, and isolate unauthenticated root command execution sinks.
+### Firmware inspection (planned)
+
+`inspect_carrier` can locate an ELF magic marker in a raw image. It does not prove an embedded executable or extract firmware; analyze independently extracted native files separately.
 
 ---
 
 ## Exploit chain templates
 
-`ExploitChainBuilder` matches discovered vulnerabilities and primitives against 6 built-in exploitation templates and ranks feasible chains by stage completeness:
+Six chain definitions exist for future evidence-backed work. Only four have draft scaffold templates; `PRIV_ESC_WINDOWS` and `AUTH_BYPASS` are explicitly unsupported. Local call-site and constrained gadget evidence are available, but no implemented producer establishes end-to-end input flow or an observed trigger. The generator returns a blocked result when evidence or required facts are missing; it does not export a runnable exploit.
 
 | Template | Stage Progression | Target Objective |
 | -------- | ----------------- | ---------------- |
@@ -275,9 +277,9 @@ const analysis = await rea.analyzeTarget('./target.elf', {
   buildChains: true
 });
 
-console.log('Attack Surface Score:', analysis.attackSurface.score);
-console.log('Vulnerabilities:', analysis.vulnerabilities.length);
-console.log('Top Exploit Chain:', analysis.exploitChains[0]);
+console.log('Candidate triage score:', analysis.attackSurface.candidate_score);
+console.log('Review candidates:', analysis.candidates.length);
+console.log('Verified vulnerabilities:', analysis.vulnerabilities.length);
 ```
 
 </details>
@@ -303,14 +305,14 @@ No. The MCP server (`src/mcp/main.js`) executes local binary inspection tools (`
 <details>
 <summary><strong>Do I need Ghidra, IDA, or Rizin installed?</strong></summary>
 
-No. Core binary extraction works out of the box using standard system utilities (`objdump`, `nm`, `strings`, `file`, and `otool` on macOS). `BinaryAnalyzer` automatically detects optional tools (`rizin`, `radare2`, `ghidra_headless`, `readelf`) when present on your `PATH`.
+No. Core binary extraction needs compatible host utilities (`objdump`, `nm`, `strings`, `file`, and `otool` on macOS). The analyzer detects `rizin` and `radare2` but does not use them for deep decompilation.
 
 </details>
 
 <details>
 <summary><strong>Does Adversarial REA upload my binary anywhere?</strong></summary>
 
-Never. Binary extraction runs strictly locally via child process execution (`objdump`, `nm`, `strings`, `otool`). When using the multi-agent swarm CLI, only compact extracted metadata summaries (symbol names, mitigation booleans, and top classified strings) are passed to your configured model endpoint.
+The binary stays local. CLI reasoning sends bounded metadata (format, sizes, import names, mitigation signals, and string *category counts*) to the configured endpoint; no extracted string values are included by default. A user can explicitly request raw sensitive strings through the local MCP `get_strings` tool with `reveal_sensitive: true`.
 
 </details>
 
@@ -320,9 +322,9 @@ Never. Binary extraction runs strictly locally via child process execution (`obj
 Run the unit and live-binary integration suites with:
 
 ```bash
-npm test                   # 61 deterministic unit tests (zero network calls)
+npm test                   # deterministic unit tests (zero network calls)
 npm run test:integration   # Live binary & stdio MCP JSON-RPC integration tests
-npm run test:all           # Full 71-test verification suite
+npm run test:all           # Full suite
 ```
 
 </details>
